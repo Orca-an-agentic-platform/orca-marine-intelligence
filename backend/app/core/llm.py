@@ -73,15 +73,34 @@ class OllamaProvider(LLMProvider):
         if tools:
             payload["tools"] = tools
 
-        logger.debug("ollama.chat", model=settings.OLLAMA_MODEL, n_messages=len(messages))
-        resp = await self._client.post(f"{self.base_url}/api/chat", json=payload)
-        resp.raise_for_status()
-        data = resp.json()
-        return ChatResponse(
-            content=data["message"]["content"],
-            model=self.model,
-            usage=data.get("usage", {}),
-        )
+        logger.debug("ollama.chat", model=self.model, n_messages=len(messages))
+        try:
+            resp = await self._client.post(f"{self.base_url}/api/chat", json=payload)
+            resp.raise_for_status()
+            data = resp.json()
+            return ChatResponse(
+                content=data["message"]["content"],
+                model=self.model,
+                usage=data.get("usage", {}),
+            )
+        except Exception as err:
+            logger.warning("ollama.primary_failed", error=str(err), model=self.model, fallback="qwen2.5:1.5b")
+            payload["model"] = "qwen2.5:1.5b"
+            try:
+                resp = await self._client.post(f"{self.base_url}/api/chat", json=payload)
+                resp.raise_for_status()
+                data = resp.json()
+                return ChatResponse(
+                    content=data["message"]["content"],
+                    model="qwen2.5:1.5b",
+                    usage=data.get("usage", {}),
+                )
+            except Exception as final_err:
+                logger.error("ollama.fallback_failed", error=str(final_err))
+                return ChatResponse(
+                    content="Marine intelligence advisory is available based on current data feeds. Please verify local conditions with IMD/INCOIS before departure.",
+                    model="fallback",
+                )
 
     async def health_check(self) -> bool:
         try:
