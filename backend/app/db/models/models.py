@@ -253,7 +253,7 @@ class DocumentChunk(Base):
     chunk_index = Column(Integer, nullable=False)
     chunk_text = Column(Text, nullable=False)
     embedding = Column(Vector(1024))         # BGE-M3 dimension
-    metadata = Column(JSONB, default=dict)
+    chunk_metadata = Column(JSONB, default=dict)   # renamed: 'metadata' is reserved by DeclarativeBase
 
     document = relationship("Document", back_populates="chunks")
     __table_args__ = (UniqueConstraint("doc_id", "chunk_index"),)
