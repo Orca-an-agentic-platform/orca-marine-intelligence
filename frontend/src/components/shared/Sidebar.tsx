@@ -1,3 +1,5 @@
+import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { UserRole } from '../../types'
 
 const ROLE_ICONS: Record<string, string> = {
@@ -6,18 +8,19 @@ const ROLE_ICONS: Record<string, string> = {
   fisheries_dept: '🐟', marketplace: '🏪', institutional_researcher: '📊', admin: '🏭',
 }
 
-const NAV_ITEMS = [
-  { id: 'dashboard', icon: '⚡', label: 'Dashboard' },
-  { id: 'map', icon: '🗺️', label: 'Marine Map' },
-  { id: 'alerts', icon: '🔔', label: 'Alerts' },
-  { id: 'route', icon: '📍', label: 'Route Planner' },
-  { id: 'history', icon: '📈', label: 'History' },
-  { id: 'data', icon: '🛰️', label: 'Data Sources' },
+const NAV_KEYS = [
+  { id: 'dashboard', icon: '⚡', key: 'nav.dashboard' },
+  { id: 'map', icon: '🗺️', key: 'nav.map' },
+  { id: 'alerts', icon: '🔔', key: 'nav.alerts' },
+  { id: 'route', icon: '📍', key: 'nav.route' },
+  { id: 'history', icon: '📈', key: 'nav.history' },
+  { id: 'data', icon: '🛰️', key: 'nav.data' },
 ]
 
 interface Props { role: UserRole; open: boolean; onChangeRole: () => void }
 
 export default function Sidebar({ role, open, onChangeRole }: Props) {
+  const { t } = useTranslation()
   if (!open) return null
 
   return (
@@ -37,31 +40,29 @@ export default function Sidebar({ role, open, onChangeRole }: Props) {
       <div className="hidden md:flex items-center gap-2 px-2 py-2 rounded-xl glass border border-cyan-400/20 mb-3">
         <span className="text-base">{ROLE_ICONS[role] ?? '👤'}</span>
         <div>
-          <p className="text-xs text-cyan-400 font-medium capitalize">{role.replace(/_/g, ' ')}</p>
+          <p className="text-xs text-cyan-400 font-medium">{t(`roles.${role}`)}</p>
         </div>
       </div>
 
-      {/* Nav */}
-      {NAV_ITEMS.map(item => (
+      {/* Nav items */}
+      {NAV_KEYS.map(item => (
         <button
           key={item.id}
           className="nav-item flex items-center gap-3 px-2 py-2.5 rounded-xl border border-transparent text-slate-400 hover:text-white w-full text-left"
         >
           <span className="text-base w-6 text-center">{item.icon}</span>
-          <span className="hidden md:block text-sm font-medium">{item.label}</span>
+          <span className="hidden md:block text-sm font-medium">{t(item.key)}</span>
         </button>
       ))}
 
-      {/* Spacer */}
       <div className="flex-1" />
 
-      {/* Change role */}
       <button
         onClick={onChangeRole}
         className="nav-item flex items-center gap-3 px-2 py-2.5 rounded-xl border border-transparent text-slate-500 hover:text-white w-full text-left"
       >
         <span className="text-base w-6 text-center">🔄</span>
-        <span className="hidden md:block text-xs">Switch Role</span>
+        <span className="hidden md:block text-xs">{t('nav.switchRole')}</span>
       </button>
     </aside>
   )

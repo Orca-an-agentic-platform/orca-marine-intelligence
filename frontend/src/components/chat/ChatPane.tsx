@@ -1,25 +1,22 @@
 import { useState, useRef, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
+import { useLangStore } from '../../store/langStore'
 import { UserRole } from '../../types'
 
 interface Message { role: 'user' | 'orca'; text: string; time: string; streaming?: boolean }
 
-const SUGGESTIONS: Record<string, string[]> = {
-  fisherman: ['Is it safe to fish near Ratnagiri tomorrow?', 'Where is the nearest PFZ today?', 'What are the wave conditions for next 24 hours?'],
-  coastal_authority: ['Show vessels in restricted zones', 'Active hazard alerts for Maharashtra coast', 'Geofence status for Malvan MPA'],
-  disaster_management: ['Vessel exposure in cyclone track', 'Prioritise response for Maharashtra coast', 'Storm surge risk for next 6 hours'],
-  maritime_operator: ['Safe route from Mumbai to Kochi avoiding bad weather', 'Sea state forecast for tomorrow morning', 'Port weather window at Cochin'],
-  researcher: ['SST anomaly trend for Arabian Sea this monsoon', 'Chlorophyll productivity vs historical average', 'PFZ shift analysis for June–September'],
-  shipping_operator: ['Best weather window for Mumbai Port departure', 'Route optimization avoiding wave heights above 3m', 'ETA estimate with weather delay'],
-}
+
 
 export default function ChatPane({ role }: { role: UserRole }) {
+  const { t } = useTranslation()
+  const { lang } = useLangStore()
   const [messages, setMessages] = useState<Message[]>([
-    { role: 'orca', text: `Hello! I'm ORCA — your marine intelligence assistant. I can help with fishing safety, weather conditions, PFZ zones, hazard alerts and route planning. What would you like to know?`, time: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) },
+    { role: 'orca', text: t('chat.welcome'), time: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) },
   ])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
-  const suggestions = SUGGESTIONS[role] ?? SUGGESTIONS.fisherman
+  const suggestions: string[] = (t(`chat.suggestions.${role}`, { returnObjects: true }) as string[]) || (t('chat.suggestions.fisherman', { returnObjects: true }) as string[])
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])
 
@@ -38,7 +35,7 @@ export default function ChatPane({ role }: { role: UserRole }) {
       const res = await fetch('http://localhost:8000/chat/query', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query, user_role: role, language: 'en' }),
+        body: JSON.stringify({ query, user_role: role, language: lang }),
       })
 
       const reader = res.body?.getReader()
@@ -70,7 +67,7 @@ export default function ChatPane({ role }: { role: UserRole }) {
       }
     } catch (e) {
       setMessages(m => m.map((msg, i) =>
-        i === m.length - 1 ? { ...msg, text: '⚠️ Could not reach ORCA backend. Make sure it is running on port 8000.', streaming: false } : msg
+        i === m.length - 1 ? { ...msg, text: t('chat.backendError'), streaming: false } : msg
       ))
     }
     setLoading(false)
@@ -82,10 +79,10 @@ export default function ChatPane({ role }: { role: UserRole }) {
       <div className="px-4 py-3 border-b border-white/5 flex items-center gap-3">
         <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-cyan-500 to-teal-400 flex items-center justify-center text-sm glow-teal">🐋</div>
         <div>
-          <p className="text-sm font-semibold text-white">ORCA</p>
+          <p className="text-sm font-semibold text-white">{t('chat.title')}</p>
           <div className="flex items-center gap-1.5">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-            <p className="text-xs text-emerald-400">Agent Online</p>
+            <p className="text-xs text-emerald-400">{t('chat.online')}</p>
           </div>
         </div>
       </div>
@@ -130,7 +127,7 @@ export default function ChatPane({ role }: { role: UserRole }) {
             value={input}
             onChange={e => setInput(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendQuery(input) } }}
-            placeholder="Ask about conditions, safety, PFZ..."
+            placeholder={t('chat.placeholder')}
             rows={2}
             className="flex-1 bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 resize-none outline-none focus:border-cyan-400/40 focus:bg-white/8 transition-all"
           />
@@ -149,7 +146,7 @@ export default function ChatPane({ role }: { role: UserRole }) {
             </button>
           </div>
         </div>
-        <p className="text-[10px] text-slate-600 mt-1.5 text-center">Data from INCOIS · IMD · MOSDAC · Sources cited in every response</p>
+        <p className="text-[10px] text-slate-600 mt-1.5 text-center">{t('chat.disclaimer')}</p>
       </div>
     </div>
   )
