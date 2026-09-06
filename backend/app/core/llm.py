@@ -97,6 +97,13 @@ class OllamaProvider(LLMProvider):
                 )
             except Exception as final_err:
                 logger.error("ollama.fallback_failed", error=str(final_err))
+                if settings.GEMINI_API_KEY:
+                    try:
+                        logger.info("ollama.gemini_fallback_trigger")
+                        gemini = GeminiProvider()
+                        return await gemini.chat(messages, tools=tools, temperature=temperature, max_tokens=max_tokens)
+                    except Exception as gem_err:
+                        logger.error("gemini.fallback_failed", error=str(gem_err))
                 return ChatResponse(
                     content="Marine intelligence advisory is available based on current data feeds. Please verify local conditions with IMD/INCOIS before departure.",
                     model="fallback",
@@ -152,12 +159,58 @@ class VLLMProvider(LLMProvider):
             return False
 
 
+class GeminiProvider(LLMProvider):
+    """Google Gemini REST API — ultra-fast cloud serving."""
+
+    def __init__(self, api_key: str = settings.GEMINI_API_KEY, model: str = settings.GEMINI_MODEL):
+        self.api_key = api_key
+        self.model = model or "gemini-1.5-flash"
+        self._client = httpx.AsyncClient(timeout=30.0)
+
+    async def chat(
+        self,
+        messages: list[ChatMessage],
+        tools: list[dict] | None = None,
+        temperature: float = 0.1,
+        max_tokens: int = 4096,
+    ) -> ChatResponse:
+        system_instruction = None
+        contents = []
+        for m in messages:
+            if m.role == "system":
+                system_instruction = {"parts": [{"text": m.content}]}
+            else:
+                role = "user" if m.role == "user" else "model"
+                contents.append({"role": role, "parts": [{"text": m.content}]})
+
+        payload: dict[str, Any] = {
+            "contents": contents,
+            "generationConfig": {"temperature": temperature, "maxOutputTokens": max_tokens},
+        }
+        if system_instruction:
+            payload["systemInstruction"] = system_instruction
+
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.model}:generateContent?key={self.api_key}"
+        logger.debug("gemini.chat", model=self.model, n_messages=len(messages))
+        resp = await self._client.post(url, json=payload)
+        resp.raise_for_status()
+        data = resp.json()
+        text = data["candidates"][0]["content"]["parts"][0]["text"]
+        return ChatResponse(content=text, model=self.model)
+
+    async def health_check(self) -> bool:
+        return bool(self.api_key)
+
+
 def get_llm_provider() -> LLMProvider:
     """Factory: returns the configured LLM provider. Swap via LLM_PROVIDER env var."""
     provider = settings.LLM_PROVIDER.lower()
     if provider == "vllm":
         logger.info("llm.provider", provider="vLLM", model=settings.VLLM_MODEL)
         return VLLMProvider()
+    elif provider == "gemini":
+        logger.info("llm.provider", provider="Gemini", model=settings.GEMINI_MODEL)
+        return GeminiProvider()
     logger.info("llm.provider", provider="Ollama", model=settings.OLLAMA_MODEL)
     return OllamaProvider()
 
