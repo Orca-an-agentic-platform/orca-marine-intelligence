@@ -23,21 +23,7 @@ class WeatherAgent:
         cyclones = await self._get_cyclones()
         lightning = await self._get_lightning_risk(location_raw)
 
-        context = f"""Weather data for {location_raw or 'query area'}:
-Forecast: {forecast}
-Waves: {waves}
-Active Warnings: {warnings}
-Cyclone Activity: {cyclones}
-Lightning Risk: {lightning}"""
-
-        messages = [
-            ChatMessage("system", SYSTEM_PROMPT),
-            ChatMessage("user", f"""Interpret this weather/hazard data for a {state['user_role']}.
-{context}
-Query: {state['query']}
-Highlight any active official warnings first. Use risk-aware language."""),
-        ]
-        resp = await llm.chat(messages, temperature=0.1, max_tokens=512)
+        interpretation = f"Forecast: {forecast.get('wind_speed_kmh')} km/h {forecast.get('wind_direction')} wind, {forecast.get('visibility_km')} km visibility. Waves: {waves.get('significant_wave_height_m')} m. Warnings: {warnings.get('active_warnings')}."
 
         has_active_warnings = bool(warnings.get("active_warnings"))
         has_cyclone = cyclones.get("active_cyclones", False)
@@ -48,7 +34,7 @@ Highlight any active official warnings first. Use risk-aware language."""),
             "warnings": warnings,
             "cyclones": cyclones,
             "lightning": lightning,
-            "interpretation": resp.content,
+            "interpretation": interpretation,
             "has_active_official_warning": has_active_warnings or has_cyclone,
             "retrieved_at": datetime.utcnow().isoformat(),
             "sources": ["IMD", "INCOIS OSF", "RSMC New Delhi"],
