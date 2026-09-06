@@ -63,8 +63,9 @@ class OllamaProvider(LLMProvider):
         temperature: float = 0.1,
         max_tokens: int = 4096,
     ) -> ChatResponse:
+        current_model = self.model or settings.OLLAMA_MODEL
         payload: dict[str, Any] = {
-            "model": self.model,
+            "model": settings.OLLAMA_MODEL,
             "messages": [m.to_dict() for m in messages],
             "options": {"temperature": temperature, "num_predict": max_tokens},
             "stream": False,
@@ -72,7 +73,7 @@ class OllamaProvider(LLMProvider):
         if tools:
             payload["tools"] = tools
 
-        logger.debug("ollama.chat", model=self.model, n_messages=len(messages))
+        logger.debug("ollama.chat", model=settings.OLLAMA_MODEL, n_messages=len(messages))
         resp = await self._client.post(f"{self.base_url}/api/chat", json=payload)
         resp.raise_for_status()
         data = resp.json()

@@ -30,8 +30,8 @@ class Settings(BaseSettings):
     # ── LLM ──────────────────────────────────────────────────────────────────
     LLM_PROVIDER: str = "ollama"          # ollama | vllm
     OLLAMA_BASE_URL: str = "http://localhost:11434"
-    OLLAMA_MODEL: str = "gemma2:12b"      # Primary: Gemma 4 12B
-    OLLAMA_MODEL_FALLBACK: str = "qwen:8b"  # Fallback: Qwen3-8B
+    OLLAMA_MODEL: str = "qwen2.5:1.5b"      # Active local model
+    OLLAMA_MODEL_FALLBACK: str = "gemma2:9b"  # Fallback model
     VLLM_BASE_URL: str = "http://localhost:8000"
     VLLM_MODEL: str = "google/gemma-4-12b"
 
