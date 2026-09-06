@@ -26,28 +26,14 @@ class MarineAgent:
         pfz = await self._get_pfz(location_raw, today)
         currents = await self._get_currents(location_raw)
 
-        # ── LLM interpretation (never the source of truth) ─────────────────
-        context = f"""Marine data for {location_raw or 'query area'} on {today}:
-SST: {sst}
-Chlorophyll: {chlorophyll}
-PFZ: {pfz}
-Currents: {currents}"""
-
-        messages = [
-            ChatMessage("system", SYSTEM_PROMPT),
-            ChatMessage("user", f"""Interpret this marine data for a {state['user_role']}.
-{context}
-Query: {state['query']}
-Provide a brief interpretation. Cite sources. Do not claim guaranteed conditions."""),
-        ]
-        resp = await llm.chat(messages, temperature=0.1, max_tokens=512)
+        interpretation = f"SST: {sst.get('value')}{sst.get('unit')}, Chlorophyll: {chlorophyll.get('value')} {chlorophyll.get('unit')}, PFZ: {pfz.get('confidence')} confidence at {pfz.get('distance_km')}km {pfz.get('direction')}, Currents: {currents.get('speed_knots')} knots at {currents.get('direction_deg')}°."
 
         return {
             "sst": sst,
             "chlorophyll": chlorophyll,
             "pfz": pfz,
             "currents": currents,
-            "interpretation": resp.content,
+            "interpretation": interpretation,
             "retrieved_at": datetime.utcnow().isoformat(),
             "sources": ["INCOIS PFZ WebGIS", "MOSDAC SST", "MOSDAC Chlorophyll", "INCOIS OSF"],
         }
