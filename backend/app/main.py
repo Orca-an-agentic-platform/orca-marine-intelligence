@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from prometheus_fastapi_instrumentator import Instrumentator
 
 from app.api.routes import auth, chat, marine, weather, geo, risk, advisory, alerts, data, knowledge, vessels, health
+from app.api.v1.endpoints import ws
 from app.core.config import settings
 from app.db.session import init_db
 
@@ -19,7 +20,11 @@ logger = structlog.get_logger()
 async def lifespan(app: FastAPI):
     """Startup and shutdown events."""
     logger.info("ORCA backend starting up", env=settings.APP_ENV)
-    # await init_db()  # disabled until PostgreSQL is running
+    try:
+        await init_db()
+        logger.info("PostgreSQL database connected successfully")
+    except Exception as e:
+        logger.warning(f"Database connection waiting/retrying: {e}")
     yield
     logger.info("ORCA backend shutting down")
 
@@ -58,3 +63,4 @@ app.include_router(alerts.router,    prefix="/alerts",       tags=["Alerts"])
 app.include_router(data.router,      prefix="/data",         tags=["Data"])
 app.include_router(knowledge.router, prefix="/knowledge",    tags=["Knowledge"])
 app.include_router(vessels.router,   prefix="/vessels",      tags=["Vessels"])
+app.include_router(ws.router,        prefix="/ws",           tags=["WebSocket"])
