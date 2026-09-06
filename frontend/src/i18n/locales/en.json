@@ -1,0 +1,125 @@
+{
+  "lang": "en",
+  "appName": "ORCA",
+  "tagline": "Marine EcOsystem Reasoning with Collaborative Agents",
+  "promise": "Reliable Decisions · Safer Operations · Stronger Impact",
+  "selectRole": "Select your role to continue",
+  "roles": {
+    "fisherman": "Fisherman",
+    "coastal_authority": "Coastal Authority",
+    "disaster_management": "Disaster Management",
+    "maritime_operator": "Maritime Operator",
+    "researcher": "Researcher",
+    "shipping_operator": "Shipping Operator",
+    "fisheries_dept": "Fisheries",
+    "marketplace": "Marketplace",
+    "institutional_researcher": "Marine Analysis",
+    "admin": "Logistics"
+  },
+  "roleDesc": {
+    "fisherman": "PFZ, weather, Go/No-Go, offline",
+    "coastal_authority": "Vessel tracking, geofencing, incidents",
+    "disaster_management": "Hazard intel, response prioritisation",
+    "maritime_operator": "Route planning, sea-state scheduling",
+    "researcher": "Historical analysis, data export",
+    "shipping_operator": "Port conditions, route optimisation"
+  },
+  "dashboard": {
+    "fisherman": "Fisherman Dashboard",
+    "coastal_authority": "Coastal Authority",
+    "disaster_management": "Disaster Management",
+    "maritime_operator": "Maritime Ops",
+    "researcher": "Research Dashboard",
+    "shipping_operator": "Shipping Ops",
+    "fisheries_dept": "Fisheries",
+    "marketplace": "Marketplace",
+    "institutional_researcher": "Marine Analysis",
+    "admin": "Marine Logistics"
+  },
+  "nav": {
+    "dashboard": "Dashboard",
+    "map": "Marine Map",
+    "alerts": "Alerts",
+    "route": "Route Planner",
+    "history": "History",
+    "data": "Data Sources",
+    "switchRole": "Switch Role"
+  },
+  "header": {
+    "live": "LIVE",
+    "location": "Ratnagiri Coast, MH"
+  },
+  "chat": {
+    "title": "ORCA",
+    "online": "Agent Online",
+    "placeholder": "Ask about conditions, safety, PFZ...",
+    "disclaimer": "Data from INCOIS · IMD · MOSDAC · Sources cited in every response",
+    "welcome": "Hello! I'm ORCA — your marine intelligence assistant. I can help with fishing safety, weather conditions, PFZ zones, hazard alerts and route planning. What would you like to know?",
+    "backendError": "Could not reach ORCA backend. Make sure it is running on port 8000.",
+    "suggestions": {
+      "fisherman": [
+        "Is it safe to fish near Ratnagiri tomorrow?",
+        "Where is the nearest PFZ today?",
+        "What are the wave conditions for next 24 hours?"
+      ],
+      "coastal_authority": [
+        "Show vessels in restricted zones",
+        "Active hazard alerts for Maharashtra coast",
+        "Geofence status for Malvan MPA"
+      ],
+      "disaster_management": [
+        "Vessel exposure in cyclone track",
+        "Prioritise response for Maharashtra coast",
+        "Storm surge risk for next 6 hours"
+      ],
+      "maritime_operator": [
+        "Safe route from Mumbai to Kochi avoiding bad weather",
+        "Sea state forecast for tomorrow morning",
+        "Port weather window at Cochin"
+      ],
+      "researcher": [
+        "SST anomaly trend for Arabian Sea this monsoon",
+        "Chlorophyll productivity vs historical average",
+        "PFZ shift analysis for June–September"
+      ],
+      "shipping_operator": [
+        "Best weather window for Mumbai Port departure",
+        "Route optimization avoiding wave heights above 3m",
+        "ETA estimate with weather delay"
+      ]
+    }
+  },
+  "conditions": {
+    "waves": "Wave Height",
+    "wind": "Wind Speed",
+    "sst": "Sea Temp",
+    "chl": "Chlorophyll",
+    "tide": "Tide",
+    "vis": "Visibility"
+  },
+  "risk": {
+    "title": "Risk Assessment",
+    "score": "Risk Score",
+    "factors": "Risk Factors",
+    "evidence": "Evidence",
+    "alerts": "Alerts",
+    "uncertainty": "Risk assessment based on available data. Conditions may change. Always verify with local authorities before venturing to sea.",
+    "levels": { "LOW": "LOW", "MODERATE": "MODERATE", "HIGH": "HIGH", "CRITICAL": "CRITICAL" },
+    "gonogo": { "GO": "GO", "CAUTION": "CAUTION", "NO-GO": "NO-GO" },
+    "forDeparture": "for departure",
+    "noWarnings": "No cyclone or high-wave warnings",
+    "lastChecked": "Last checked"
+  },
+  "alert": {
+    "default": "Southwest monsoon active — exercise caution. Verify with IMD before departure."
+  },
+  "map": {
+    "sampleData": "Sample data · INCOIS/MOSDAC",
+    "legend": "Legend",
+    "pfz": "PFZ (Sample)",
+    "restricted": "Restricted Zone",
+    "vessel": "Vessel",
+    "port": "Port"
+  },
+  "version": "SIH26176 · Team TechnoCrakerz · v0.1.0"
+}
