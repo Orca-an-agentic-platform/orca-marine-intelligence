@@ -14,7 +14,8 @@ logger = structlog.get_logger()
 
 class GeoAgent:
 
-    async def run(self, state: ORCAState) -> dict:
+    async def run_with_warnings(self, state: ORCAState) -> tuple[dict, list[str]]:
+        """Returns (result_dict, warnings_list). Caller adds warnings via the reducer."""
         intent = state.get("intent", {})
         location_raw = intent.get("location_raw")
 
@@ -26,23 +27,30 @@ class GeoAgent:
 
         # ── DETERMINISTIC: restricted zone = hard block, no LLM override ──
         in_restricted = restricted.get("in_restricted_zone", False)
+        extra_warnings: list[str] = []
         if in_restricted:
-            state["warnings"].append(
+            extra_warnings.append(
                 f"⛔ RESTRICTED ZONE: {restricted.get('zone_name', 'Unknown')} — "
                 f"access not permitted. Authority: {restricted.get('authority', 'Unknown')}."
             )
             logger.warning("geo.restricted_zone_violation", location=location_raw)
 
-        return {
+        result = {
             "coordinates": coords,
             "restricted_zone_check": restricted,
             "mpa_check": mpa,
             "bathymetry": bathymetry,
             "nearest_port": nearest_port,
-            "in_restricted_zone": in_restricted,  # Hard flag for risk agent
+            "in_restricted_zone": in_restricted,
             "retrieved_at": datetime.utcnow().isoformat(),
             "sources": ["Bhuvan/INCOIS", "MPA Registry", "Admiralty Charts"],
         }
+        return result, extra_warnings
+
+    # Keep legacy run() for any direct calls
+    async def run(self, state: ORCAState) -> dict:
+        result, _ = await self.run_with_warnings(state)
+        return result
 
     async def _geocode(self, place_name: str | None) -> dict:
         """Nominatim / Bhuvan geocoding — returns lat/lon for named location."""
