@@ -19,7 +19,7 @@ logger = structlog.get_logger()
 async def lifespan(app: FastAPI):
     """Startup and shutdown events."""
     logger.info("ORCA backend starting up", env=settings.APP_ENV)
-    await init_db()
+    # await init_db()  # disabled until PostgreSQL is running
     yield
     logger.info("ORCA backend shutting down")
 
