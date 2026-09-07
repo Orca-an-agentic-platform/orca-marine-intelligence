@@ -28,12 +28,19 @@ python-jose[cryptography]>=3.3.0
 passlib[bcrypt]>=1.7.4
 PyJWT>=2.8.0
 
-# Multi-Agent Orchestration & AI Engine
+# Multi-Agent Orchestration & AI Engine (Gemma, Qwen, Gemini, Ollama, vLLM)
 langgraph>=0.1.0
 langchain>=0.2.0
 langchain-community>=0.2.0
 langchain-core>=0.2.0
 langchain-ollama>=0.1.0
+langchain-google-genai>=1.0.0
+langchain-openai>=0.1.0
+google-generativeai>=0.5.0
+ollama>=0.2.0
+transformers>=4.40.0
+huggingface-hub>=0.23.0
+torch>=2.2.0
 sentence-transformers>=3.0.0
 
 # Scientific, Geospatial & Tabular Data
