@@ -234,6 +234,26 @@ export async function getRiskData() {
   return apiFetch('/risk/')
 }
 
+export async function getAdvisoryData() {
+  return apiFetch('/advisory/')
+}
+
+export async function getAlertsData() {
+  return apiFetch('/alerts/')
+}
+
+export async function getGeoData() {
+  return apiFetch('/geo/')
+}
+
+export async function getDataFeeds() {
+  return apiFetch('/data/')
+}
+
+export async function getKnowledgeData() {
+  return apiFetch('/knowledge/')
+}
+
 // ── Backend Availability Check ───────────────────────────────────────────────
 
 /**
