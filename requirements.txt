@@ -1,0 +1,2 @@
+# ── ORCA Marine Intelligence Platform — Root Requirements ──
+-r backend/requirements.txt
