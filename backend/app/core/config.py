@@ -28,14 +28,16 @@ class Settings(BaseSettings):
     REDIS_URL: str = "redis://localhost:6379/0"
 
     # ── LLM ──────────────────────────────────────────────────────────────────
-    LLM_PROVIDER: str = "ollama"          # ollama | vllm | gemini
+    LLM_PROVIDER: str = "gemini"          # gemini | ollama | vllm
     OLLAMA_BASE_URL: str = "http://localhost:11434"
-    OLLAMA_MODEL: str = "qwen2.5:3b"        # Active local model
-    OLLAMA_MODEL_FALLBACK: str = "gemma:2b"
+    OLLAMA_MODEL: str = "gemma2:2b"          # Primary local model
+    OLLAMA_MODEL_FALLBACK: str = "qwen2.5:1.5b"  # Fallback local model
     VLLM_BASE_URL: str = "http://localhost:8000"
     VLLM_MODEL: str = "google/gemma-4-12b"
-    GEMINI_API_KEY: str = ""
-    GEMINI_MODEL: str = "gemini-1.5-flash"
+    GEMINI_API_KEY: str = "AQ.Ab8RN6JFHpWoAGFztxnK-tXdu1ElPEvxVFSJSyvjUVqeM1yPvQ"
+    GEMINI_MODEL: str = "gemini-flash-latest"
+    GROQ_API_KEY: str = "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"
+    GROQ_MODEL: str = "groq/compound-mini"
 
     # ── Embeddings ────────────────────────────────────────────────────────────
     EMBEDDING_MODEL: str = "BAAI/bge-m3"

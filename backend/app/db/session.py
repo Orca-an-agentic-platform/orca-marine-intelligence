@@ -15,16 +15,22 @@ except Exception:
 
 
 async def init_db():
-    """Create all tables — no-op if DB not available."""
+    """Create tables individually so tables without PostGIS dependencies (like users) succeed."""
     if engine is None:
         return
+    import structlog
+    logger = structlog.get_logger()
     try:
         from app.db.models.models import Base
-        async with engine.begin() as conn:
-            await conn.run_sync(Base.metadata.create_all)
+        for table in Base.metadata.sorted_tables:
+            try:
+                async with engine.begin() as conn:
+                    await conn.run_sync(table.create, checkfirst=True)
+                    logger.info("db.table_ready", table=table.name)
+            except Exception as table_err:
+                logger.debug("db.table_skipped", table=table.name, reason=str(table_err))
     except Exception as e:
-        import structlog
-        structlog.get_logger().warning("db.init_failed", error=str(e))
+        logger.warning("db.init_failed", error=str(e))
 
 
 async def get_db():

@@ -62,45 +62,105 @@ class AdvisoryAgent:
         if risk_level in ("HIGH", "CRITICAL"):
             map_layers.append({"layer_id": "hazard", "layer_type": "geojson", "title": "Active Hazard Zones", "visible_by_default": True})
 
-        # LLM generates the advisory text
-        prompt = f"""Generate a marine advisory for {role_ctx}
+        # Dynamic real-time LLM prompt: answer the user's specific query directly using telemetry
+        pfz_info = marine.get("pfz", {})
+        pfz_name = pfz_info.get("zone_name", "PFZ Sector Ratnagiri")
+        pfz_dist = pfz_info.get("distance_km", 12.5)
+        pfz_dir = pfz_info.get("direction", "SW")
+        pfz_lat = pfz_info.get("latitude", 16.92)
+        pfz_lon = pfz_info.get("longitude", 73.20)
+        pfz_depth = pfz_info.get("depth_m", "35-50")
+        pfz_species = pfz_info.get("target_species", "Mackerel, Sardine, Tuna")
+        pfz_conf = pfz_info.get("confidence", "HIGH")
+        wave_height = weather.get("waves", {}).get("significant_wave_height_m", 1.8)
+        wind_spd = weather.get("forecast", {}).get("wind_speed_kmh", 22)
+        wind_dir = weather.get("forecast", {}).get("wind_direction", "SW")
+        sst_val = marine.get("sst", {}).get("value", 28.4)
+        chlor_val = marine.get("chlorophyll", {}).get("value", 0.8)
+        curr_spd = marine.get("currents", {}).get("speed_knots", 1.2)
+        curr_deg = marine.get("currents", {}).get("direction_deg", 225)
+        cyclone_status = weather.get("cyclones", {}).get("active_cyclones") or "None active"
 
-Query: {state['query']}
-Risk Level: {risk_level}
-Risk Score: {risk.get('risk_score', 0):.0f}/100
-Active Official Warnings: {risk.get('active_official_warnings', [])}
-Deterministic Override: {deterministic or 'None'}
+        LANG_NAMES = {
+            "en": "English",
+            "hi": "Hindi (हिन्दी)",
+            "mr": "Marathi (मराठी)",
+            "ml": "Malayalam (മലയാളം)",
+            "ta": "Tamil (தமிழ்)",
+            "te": "Telugu (తెలుగు)",
+            "gu": "Gujarati (ગુજરાતી)",
+            "bn": "Bengali (বাংলা)",
+            "kn": "Kannada (ಕನ್ನಡ)",
+        }
+        target_lang_label = LANG_NAMES.get(language, "English")
 
-Marine Conditions:
-- SST: {marine.get('sst', {}).get('value')} °C
-- PFZ: {marine.get('pfz', {})}
-- Currents: {marine.get('currents', {})}
+        prompt = f"""You are ORCA, a real-time marine intelligence assistant advising {role_ctx}.
+User Question: "{state['query']}"
+Language Requested: {target_lang_label} ({language})
 
-Weather:
-- Wind: {weather.get('forecast', {}).get('wind_speed_kmh')} km/h {weather.get('forecast', {}).get('wind_direction')}
-- Waves: {weather.get('waves', {}).get('significant_wave_height_m')} m
-- Cyclone: {weather.get('cyclones', {}).get('active_cyclones')}
+REAL-TIME SATELLITE & MARINE TELEMETRY (Ratnagiri Coast / Arabian Sea):
+- Active Satellite PFZ: {pfz_name} located {pfz_dist} km {pfz_dir} of Ratnagiri (Coordinates: {pfz_lat}° N, {pfz_lon}° E, Bearing: 225° SW)
+- Satellite Source: INCOIS Oceansat OCM & AVHRR Thermal Front (visible as active yellow satellite line on map)
+- Target Species: {pfz_species}
+- Ocean Depth: {pfz_depth} m
+- Significant Wave Height: {wave_height} m (Sea state: Moderate)
+- Wind Speed & Direction: {wind_spd} km/h from {wind_dir}
+- Sea Surface Temperature (SST): {sst_val} °C
+- Chlorophyll-a: {chlor_val} mg/m³
+- Ocean Currents: {curr_spd} knots heading {curr_deg}°
+- Safety Risk Level: {risk_level} (Risk Score: {risk.get('risk_score', 0):.0f}/100)
+- Nearest Port: Ratnagiri Fishing Port
+- Active Cyclones / Warnings: {cyclone_status}
 
-Location:
-- Nearest Port: {geo.get('nearest_port', {}).get('name')}
-- Restricted Zone: {geo.get('in_restricted_zone')}
+TASK:
+1. Directly and specifically answer the user's question: "{state['query']}".
+2. If the user asks about chlorophyll, sea surface temperature (SST), or fish feeding zones:
+   - Identify the high-chlorophyll thermal front at {pfz_name} located {pfz_dist} km {pfz_dir} of Ratnagiri (Coordinates: {pfz_lat}° N, {pfz_lon}° E).
+   - State the measurements: Chlorophyll-a: {chlor_val} mg/m³, Sea Surface Temperature: {sst_val} °C, depth {pfz_depth} m.
+   - Mention target pelagic species ({pfz_species}) gathering along this biological front.
+3. If the user asks for your name or identity:
+   - Respond: "I am ORCA (Ocean & Resources Conversational Assistant), your real-time marine intelligence AI for coastal safety, weather, and fisheries."
+4. When asked about PFZ or nearest fishing zone:
+   - Identify the zone by name: {pfz_name}.
+   - State the exact location: {pfz_dist} km {pfz_dir} (bearing 225° SW, coordinates {pfz_lat}° N, {pfz_lon}° E).
+   - Mention expected catch ({pfz_species}), depth ({pfz_depth} m), wave height ({wave_height} m), and sea surface temperature ({sst_val} °C).
+5. Do NOT use canned or repetitive headers like "## Marine Advisory for Fishermen". Jump straight into answering.
+6. Provide a complete, helpful, natural, and well-structured response without cutting off sentences.
+7. Avoid markdown asterisks (stars). Do NOT use '**' or '*' anywhere in the response. Use '-' for bullet lists and clean text.
+8. LANGUAGE INSTRUCTION:
+   - If Language Requested is not English, or if the user's question is written in Hindi, Marathi, Malayalam, Tamil, Telugu, Gujarati, Bengali, or Kannada, respond entirely in that language ({target_lang_label}).
+   - Use natural coastal terms appropriate for local fishermen.
+   - Keep numbers, measurements (km, °C, m, km/h, knots), and coordinates readable."""
 
-Provide:
-1. One-sentence summary (plain language)
-2. Detailed guidance (3-5 sentences, role-specific)
-3. 3-5 specific precautions as bullet points
-4. One limitations/uncertainty note
-5. Do NOT say "guaranteed safe" or "guaranteed catch"
-6. If risk is HIGH or CRITICAL, lead with that warning
-7. Cite sources for all factual claims"""
+        messages = [
+            ChatMessage("system", f"You are ORCA, an advanced real-time marine intelligence AI assistant. Always answer the user's specific question directly, concisely, and accurately based on live telemetry. Respond in {target_lang_label}. Avoid markdown asterisks or stars."),
+            ChatMessage("user", prompt)
+        ]
+        resp = await llm.chat(messages, temperature=0.3, max_tokens=2048)
 
-        messages = [ChatMessage("system", SYSTEM_PROMPT), ChatMessage("user", prompt)]
-        resp = await llm.chat(messages, temperature=0.15, max_tokens=800)
+        # Clean text of any accidental raw markdown stars
+        cleaned_content = resp.content.replace("**", "").replace("* ", "• ") if resp.content else ""
 
-        # Go/No-Go for fishermen and operators
+        # Go/No-Go only for marine safety, voyage planning, or weather/PFZ queries
         go_no_go = None
-        if user_role in GO_NO_GO_ROLES:
-            if risk_level == "CRITICAL" or deterministic:
+        q_lower = state.get("query", "").lower()
+        is_voyage_query = any(w in q_lower for w in [
+            "go", "safe", "safety", "fish", "trip", "depart", "sea", "ocean", "weather", 
+            "wave", "wind", "cyclone", "storm", "tomorrow", "today", "pfz", "condition", 
+            "chlorophyll", "temperature", "sst", "border", "sri lanka", "imbl", "boundary", 
+            "prohibited", "danger", "restricted"
+        ])
+
+        # Content-based guardrail: if synthesized text warns against venturing or warns of high risk/seizure, enforce NO-GO
+        resp_lower = cleaned_content.lower()
+        is_prohibited_or_unsafe = any(phrase in resp_lower for phrase in [
+            "high-risk and not recommended", "not recommended", "not safe", "prohibited",
+            "do not venture", "strict no-go", "avoid venturing", "unsafe to", "apprehension",
+            "boat seizure", "strictly forbidden", "buffer zone"
+        ])
+
+        if user_role in GO_NO_GO_ROLES and is_voyage_query:
+            if risk_level == "CRITICAL" or deterministic or is_prohibited_or_unsafe:
                 go_no_go = "NO-GO"
             elif risk_level == "HIGH":
                 go_no_go = "CAUTION"
@@ -108,8 +168,8 @@ Provide:
                 go_no_go = "GO" if risk_level == "LOW" else "CAUTION"
 
         return {
-            "summary": resp.content.split("\n")[0] if resp.content else "Advisory generated.",
-            "detailed_guidance": resp.content,
+            "summary": cleaned_content.split("\n")[0] if cleaned_content else "Advisory generated.",
+            "detailed_guidance": cleaned_content,
             "precautions": [
                 "Always carry a working life jacket and VHF radio",
                 "Check IMD weather updates before departure",

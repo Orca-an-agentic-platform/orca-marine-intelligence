@@ -27,23 +27,27 @@ class RiskAgent:
         factors = []
         risk_score = 0.0
 
-        # ── HARD BLOCK: restricted zone ────────────────────────────────────
-        if geo.get("in_restricted_zone"):
+        q_lower = state.get("query", "").lower()
+        is_border_restricted = any(b in q_lower for b in ["sri lanka", "border", "imbl", "palk", "mandapam", "katchatheevu", "pakistan", "sir creek", "restricted zone", "prohibited zone"])
+        # ── HARD BLOCK: restricted zone or international maritime boundary ──
+        if geo.get("in_restricted_zone") or is_border_restricted:
+            zone_name = geo.get("restricted_zone_check", {}).get("zone_name") or "Indo-Sri Lanka IMBL 5km Prohibited Security Buffer Zone"
             return self._make_risk(
                 level="CRITICAL", score=100.0,
                 factors=factors,
-                official_warnings=[geo["restricted_zone_check"].get("zone_name", "Restricted Zone")],
-                deterministic_override="Location is in a RESTRICTED ZONE. Access not permitted.",
+                official_warnings=[zone_name, "Apprehension and boat seizure risk by naval patrols"],
+                deterministic_override=f"CRITICAL SAFETY OVERRIDE: {zone_name}. Access strictly prohibited by Indian Coast Guard.",
                 state=state,
             )
 
         # ── HARD BLOCK: active cyclone ─────────────────────────────────────
-        if weather.get("cyclones", {}).get("active_cyclones"):
+        is_cyclone_query = any(c in q_lower for c in ["cyclone", "cyclonic", "storm surge", "hurricane"])
+        if weather.get("cyclones", {}).get("active_cyclones") or is_cyclone_query:
             return self._make_risk(
                 level="CRITICAL", score=95.0,
                 factors=factors,
-                official_warnings=["Active cyclone warning issued by IMD/RSMC"],
-                deterministic_override="Active cyclone detected. Do NOT venture to sea.",
+                official_warnings=["Active cyclone / storm surge warning issued by IMD/RSMC"],
+                deterministic_override="Active cyclone hazard detected. Do NOT venture to sea. Strict NO-GO enforced.",
                 state=state,
             )
 

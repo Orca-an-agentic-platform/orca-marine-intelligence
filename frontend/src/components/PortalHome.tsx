@@ -8,11 +8,8 @@ import {
   Ship,
   Microscope,
   Package,
-  ArrowUpRight,
-  Wifi,
-  WifiOff
+  ArrowUpRight
 } from 'lucide-react'
-import { apiHealth, HealthResponse } from '../api'
 
 interface PortalHomeProps {
   onSelectRole: (roleName: string) => void
@@ -26,17 +23,6 @@ export const PortalHome: React.FC<PortalHomeProps> = ({
   initialSlide = 0
 }) => {
   const [activeSlide, setActiveSlide] = useState<0 | 1>(initialSlide)
-  const [backendHealth, setBackendHealth] = useState<HealthResponse | null>(null)
-  const [isBackendOnline, setIsBackendOnline] = useState<boolean | null>(null)
-
-  useEffect(() => {
-    apiHealth()
-      .then((res) => {
-        setBackendHealth(res)
-        setIsBackendOnline(res.status === 'ok')
-      })
-      .catch(() => setIsBackendOnline(false))
-  }, [])
 
   // Sync initialSlide when prop changes (e.g. returning from dashboard)
   useEffect(() => {
@@ -184,53 +170,6 @@ export const PortalHome: React.FC<PortalHomeProps> = ({
                 </svg>
               </div>
               <span className="orca-brand-text">ORCA</span>
-            </div>
-
-            {/* Backend Health Status Badge */}
-            <div className="portal-top-status-badge">
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  padding: '6px 14px',
-                  borderRadius: '9999px',
-                  fontSize: '11.5px',
-                  fontFamily: 'var(--font-mono, monospace)',
-                  fontWeight: 700,
-                  backdropFilter: 'blur(12px)',
-                  background: isBackendOnline
-                    ? 'rgba(6, 78, 59, 0.65)'
-                    : isBackendOnline === false
-                    ? 'rgba(120, 53, 15, 0.65)'
-                    : 'rgba(15, 23, 42, 0.65)',
-                  border: isBackendOnline
-                    ? '1px solid rgba(52, 211, 153, 0.4)'
-                    : isBackendOnline === false
-                    ? '1px solid rgba(251, 191, 36, 0.4)'
-                    : '1px solid rgba(148, 163, 184, 0.3)',
-                  color: isBackendOnline ? '#6ee7b7' : isBackendOnline === false ? '#fcd34d' : '#94a3b8',
-                  boxShadow: isBackendOnline ? '0 0 15px rgba(16, 185, 129, 0.25)' : 'none',
-                }}
-                title={isBackendOnline ? `FastAPI Connected (${backendHealth?.app || 'ORCA'} • ${backendHealth?.env || 'dev'})` : 'Local mode active'}
-              >
-                {isBackendOnline ? (
-                  <>
-                    <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#34d399', boxShadow: '0 0 8px #34d399' }} />
-                    <span>API & AGENTS ONLINE</span>
-                  </>
-                ) : isBackendOnline === false ? (
-                  <>
-                    <WifiOff size={13} style={{ color: '#fbbf24' }} />
-                    <span>LOCAL DEMO MODE</span>
-                  </>
-                ) : (
-                  <>
-                    <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#94a3b8' }} />
-                    <span>CHECKING BACKEND...</span>
-                  </>
-                )}
-              </div>
             </div>
           </header>
 

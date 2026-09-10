@@ -63,6 +63,9 @@ export const App: React.FC = () => {
     if (role === 'Fishermen') {
       localStorage.setItem('orca_fisherman_registered', 'true')
     }
+    if (role === 'Disaster Management') {
+      localStorage.setItem('orca_disaster_management_registered', 'true')
+    }
     setLoginModalOpen(false)
     setViewMode('dashboard')
   }
@@ -96,6 +99,7 @@ export const App: React.FC = () => {
       {/* ── 2. ROLE DASHBOARDS (Specialized Mission Consoles) ── */}
       {viewMode === 'dashboard' && (
         <RoleDashboards
+          key={selectedRole}
           initialRole={selectedRole}
           onBackToHome={() => {
             setPortalInitialSlide(1)

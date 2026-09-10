@@ -42,6 +42,9 @@ import { TacticalRadarMap } from './TacticalRadarMap'
 import { AgentReasoningEngine } from './AgentReasoningEngine'
 import { FLEET_VESSELS, INCOIS_BUOYS } from '../mockData'
 import { Vessel, BuoyStation } from '../types'
+import { FishermanDashboard } from './FishermanDashboard'
+import { MarineWeatherDashboard } from './MarineWeatherDashboard'
+import { DisasterDigitalTwin } from './DisasterDigitalTwin'
 
 interface RoleDashboardsProps {
   initialRole: 'Fishermen' | 'Researchers' | 'Coastal Authorities' | 'Disaster Management' | string
@@ -54,20 +57,36 @@ export const RoleDashboards: React.FC<RoleDashboardsProps> = ({
   onBackToHome,
   onOpenAgentModal
 }) => {
-  const [currentRole, setCurrentRole] = useState<string>(
-    initialRole === 'Fishermen' ? 'Fisherman'
-    : initialRole === 'Researchers' ? 'Researcher'
-    : initialRole === 'Disaster Management' ? 'Disaster Management'
-    : 'Coastal Authority'
-  )
+  const getNormalizedRole = (role: string) => {
+    if (role === 'Fishermen' || role === 'Fisherman') return 'Fisherman'
+    if (role === 'Researchers' || role === 'Researcher') return 'Researcher'
+    if (role === 'Disaster Management' || role === 'disaster_management') return 'Disaster Management'
+    return 'Coastal Authority'
+  }
+
+  const [currentRole, setCurrentRole] = useState<string>(getNormalizedRole(initialRole))
 
   const [activeSidebarItem, setActiveSidebarItem] = useState('Dashboard')
   const [liveBackend, setLiveBackend] = useState<boolean | null>(null)
   const [selectedVessel, setSelectedVessel] = useState<Vessel | null>(FLEET_VESSELS[0])
   const [selectedBuoy, setSelectedBuoy] = useState<BuoyStation | null>(INCOIS_BUOYS[3])
   const [fishermanSubTab, setFishermanSubTab] = useState<'all' | 'map' | 'agent' | 'sos'>('all')
+  const [disasterSubTab, setDisasterSubTab] = useState<'overview' | 'digital_twin' | 'weather'>('overview')
   const [sosSent, setSosSent] = useState(false)
   const [fishermanName, setFishermanName] = useState<string>('Captain Anthony Murugan')
+
+  const [officerInfo, setOfficerInfo] = useState<{
+    name: string
+    phone: string
+    department: string
+    designation: string
+    govId: string
+    idCardPhoto?: string
+  } | null>(null)
+
+  useEffect(() => {
+    setCurrentRole(getNormalizedRole(initialRole))
+  }, [initialRole])
 
   useEffect(() => {
     isBackendAvailable().then(avail => setLiveBackend(avail))
@@ -83,7 +102,28 @@ export const RoleDashboards: React.FC<RoleDashboardsProps> = ({
         if (u.name) setFishermanName(u.name)
       } catch {}
     }
-  }, [])
+
+    try {
+      const u = JSON.parse(localStorage.getItem('orca_current_user') || '{}')
+      const storedName = localStorage.getItem('orca_disaster_officer_name') || u.name
+      const storedPhone = localStorage.getItem('orca_disaster_officer_phone') || u.phone
+      const storedDept = localStorage.getItem('orca_disaster_officer_dept') || u.department || 'National Disaster Response Force (NDRF)'
+      const storedDesig = localStorage.getItem('orca_disaster_officer_designation') || u.designation || 'Zonal Disaster Mitigation Officer'
+      const storedId = localStorage.getItem('orca_disaster_officer_id') || u.govId || 'NDRF-EOC-2026-DM'
+      const storedPhoto = u.idCardPhoto || localStorage.getItem('orca_disaster_officer_photo') || ''
+
+      if (storedName || u.name || localStorage.getItem('orca_disaster_management_registered') === 'true') {
+        setOfficerInfo({
+          name: storedName || 'Commanding Officer',
+          phone: storedPhone || '',
+          department: storedDept,
+          designation: storedDesig,
+          govId: storedId,
+          idCardPhoto: storedPhoto
+        })
+      }
+    } catch {}
+  }, [currentRole])
 
   const speakAudio = (text: string) => {
     if ('speechSynthesis' in window) {
@@ -97,6 +137,14 @@ export const RoleDashboards: React.FC<RoleDashboardsProps> = ({
   }
 
   return (
+    <>
+    {/* ── FISHERMAN: Render the new 3-column dashboard ── */}
+    {currentRole === 'Fisherman' && (
+      <FishermanDashboard onSwitchRole={onBackToHome} />
+    )}
+
+    {/* ── OTHER ROLES: Existing dashboard shell ── */}
+    {currentRole !== 'Fisherman' && (
     <div className="role-dashboard-shell">
       {/* ── Top Role Switcher Toolbar (Allows user to inspect all 4 dashboards easily) ── */}
       <div className="dashboard-role-switcher-strip">
@@ -292,17 +340,29 @@ export const RoleDashboards: React.FC<RoleDashboardsProps> = ({
 
             {currentRole === 'Disaster Management' && (
               <>
-                <button className={`nav-menu-btn ${activeSidebarItem === 'Dashboard' ? 'active' : ''}`} onClick={() => setActiveSidebarItem('Dashboard')}>
-                  <span className="menu-icon">📊</span> Dashboard
+                <button
+                  className={`nav-menu-btn ${(activeSidebarItem === 'Dashboard' && disasterSubTab === 'overview') ? 'active' : ''}`}
+                  onClick={() => { setActiveSidebarItem('Dashboard'); setDisasterSubTab('overview'); }}
+                >
+                  <span className="menu-icon">📊</span> Command Center
+                </button>
+                <button
+                  className={`nav-menu-btn ${(activeSidebarItem === 'Digital Twin' || disasterSubTab === 'digital_twin') ? 'active' : ''}`}
+                  onClick={() => { setActiveSidebarItem('Digital Twin'); setDisasterSubTab('digital_twin'); }}
+                >
+                  <span className="menu-icon">🌐</span> Digital Twin Simulator
+                </button>
+                <button
+                  className={`nav-menu-btn ${(activeSidebarItem === 'Weather Forecast' || disasterSubTab === 'weather') ? 'active' : ''}`}
+                  onClick={() => { setActiveSidebarItem('Weather Forecast'); setDisasterSubTab('weather'); }}
+                >
+                  <span className="menu-icon">⛅</span> Weather Surveillance
                 </button>
                 <button className={`nav-menu-btn ${activeSidebarItem === 'Early Warnings' ? 'active' : ''}`} onClick={() => setActiveSidebarItem('Early Warnings')}>
                   <span className="menu-icon">🔔</span> Early Warnings
                 </button>
                 <button className={`nav-menu-btn ${activeSidebarItem === 'Cyclone Tracking' ? 'active' : ''}`} onClick={() => setActiveSidebarItem('Cyclone Tracking')}>
                   <span className="menu-icon">🌪️</span> Cyclone Tracking
-                </button>
-                <button className={`nav-menu-btn ${activeSidebarItem === 'Weather Forecast' ? 'active' : ''}`} onClick={() => setActiveSidebarItem('Weather Forecast')}>
-                  <span className="menu-icon">⛅</span> Weather Forecast
                 </button>
                 <button className={`nav-menu-btn ${activeSidebarItem === 'Vessel Monitoring' ? 'active' : ''}`} onClick={() => setActiveSidebarItem('Vessel Monitoring')}>
                   <span className="menu-icon">🚢</span> Vessel Monitoring
@@ -1080,83 +1140,478 @@ export const RoleDashboards: React.FC<RoleDashboardsProps> = ({
             </div>
           )}
 
-          {/* ════ VIEW 4: DISASTER MANAGEMENT DASHBOARD ════ */}
-          {currentRole === 'Disaster Management' && (
-            <div className="role-view-content">
-              <div className="greeting-banner">
-                <h2>Welcome, Disaster Management</h2>
-                <p>Early warnings for safer and resilient coastal communities.</p>
+          {/* ════ VIEW 4: DISASTER MANAGEMENT DASHBOARD (Sky Blue + White Theme) ════ */}
+          {/* Sub-view A: Digital Twin Simulator */}
+          {currentRole === 'Disaster Management' && (activeSidebarItem === 'Digital Twin' || disasterSubTab === 'digital_twin') && (
+            <div className="role-view-content" style={{ padding: '8px 0 30px 0' }}>
+              <div style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <button
+                    onClick={() => { setActiveSidebarItem('Dashboard'); setDisasterSubTab('overview'); }}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      padding: '6px 14px',
+                      borderRadius: '8px',
+                      background: '#ffffff',
+                      border: '1px solid #bae6fd',
+                      fontSize: '13px',
+                      fontWeight: 700,
+                      color: '#0284c7',
+                      cursor: 'pointer',
+                      boxShadow: '0 2px 6px rgba(14, 165, 233, 0.1)'
+                    }}
+                  >
+                    <ArrowLeft size={14} /> Back to Command Center
+                  </button>
+                  <span style={{ fontSize: '13px', color: '#0369a1', fontWeight: 600 }}>• Coastal Digital Twin Hydrodynamic Simulation</span>
+                </div>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button
+                    onClick={() => { setActiveSidebarItem('Dashboard'); setDisasterSubTab('overview'); }}
+                    style={{
+                      padding: '6px 12px',
+                      borderRadius: '8px',
+                      fontSize: '12px',
+                      fontWeight: 700,
+                      border: '1px solid #bae6fd',
+                      background: '#ffffff',
+                      color: '#0369a1',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    📊 Command Overview
+                  </button>
+                  <button
+                    onClick={() => { setActiveSidebarItem('Weather Forecast'); setDisasterSubTab('weather'); }}
+                    style={{
+                      padding: '6px 12px',
+                      borderRadius: '8px',
+                      fontSize: '12px',
+                      fontWeight: 700,
+                      border: '1px solid #bae6fd',
+                      background: '#ffffff',
+                      color: '#0369a1',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    ⛅ Weather Surveillance
+                  </button>
+                </div>
+              </div>
+              <DisasterDigitalTwin />
+            </div>
+          )}
+
+          {/* Sub-view B: Integrated Weather Surveillance */}
+          {currentRole === 'Disaster Management' && (activeSidebarItem === 'Weather Forecast' || disasterSubTab === 'weather') && (
+            <div className="role-view-content" style={{ padding: '8px 0 30px 0' }}>
+              <div style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <button
+                    onClick={() => { setActiveSidebarItem('Dashboard'); setDisasterSubTab('overview'); }}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      padding: '6px 14px',
+                      borderRadius: '8px',
+                      background: '#ffffff',
+                      border: '1px solid #bae6fd',
+                      fontSize: '13px',
+                      fontWeight: 700,
+                      color: '#0284c7',
+                      cursor: 'pointer',
+                      boxShadow: '0 2px 6px rgba(14, 165, 233, 0.1)'
+                    }}
+                  >
+                    <ArrowLeft size={14} /> Back to Command Center
+                  </button>
+                  <span style={{ fontSize: '13px', color: '#0369a1', fontWeight: 600 }}>• EOC Integrated Weather Surveillance</span>
+                </div>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button
+                    onClick={() => { setActiveSidebarItem('Dashboard'); setDisasterSubTab('overview'); }}
+                    style={{
+                      padding: '6px 12px',
+                      borderRadius: '8px',
+                      fontSize: '12px',
+                      fontWeight: 700,
+                      border: '1px solid #bae6fd',
+                      background: '#ffffff',
+                      color: '#0369a1',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    📊 Command Overview
+                  </button>
+                  <button
+                    onClick={() => { setActiveSidebarItem('Digital Twin'); setDisasterSubTab('digital_twin'); }}
+                    style={{
+                      padding: '6px 12px',
+                      borderRadius: '8px',
+                      fontSize: '12px',
+                      fontWeight: 700,
+                      border: '1px solid #0284c7',
+                      background: '#0284c7',
+                      color: '#ffffff',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    🌐 Digital Twin Simulator
+                  </button>
+                </div>
+              </div>
+              <MarineWeatherDashboard />
+            </div>
+          )}
+
+          {/* Sub-view C: Main Disaster Management Command Center (Sky Blue + White Theme) */}
+          {currentRole === 'Disaster Management' &&
+            activeSidebarItem === 'Dashboard' &&
+            disasterSubTab === 'overview' && (
+            <div className="role-view-content" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+              {/* 1. Sky Blue + White Greeting Banner with Quick Mode Tabs */}
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  flexWrap: 'wrap',
+                  gap: '16px',
+                  background: 'linear-gradient(135deg, #0284c7 0%, #0ea5e9 45%, #38bdf8 100%)',
+                  border: '1px solid rgba(255, 255, 255, 0.4)',
+                  borderRadius: '16px',
+                  padding: '24px 28px',
+                  color: '#ffffff',
+                  boxShadow: '0 10px 25px -5px rgba(14, 165, 233, 0.35)'
+                }}
+              >
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '6px', flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: '26px' }}>🚨</span>
+                    <h2 style={{ margin: 0, fontSize: '24px', fontWeight: 800, letterSpacing: '-0.4px', color: '#ffffff' }}>
+                      Welcome, {officerInfo?.name || 'Captain Vikram Rathore'}!
+                    </h2>
+                    <span style={{
+                      background: 'rgba(255, 255, 255, 0.22)',
+                      color: '#ffffff',
+                      border: '1px solid rgba(255, 255, 255, 0.45)',
+                      padding: '3px 12px',
+                      borderRadius: '9999px',
+                      fontSize: '11px',
+                      fontWeight: 700,
+                      letterSpacing: '0.6px',
+                      backdropFilter: 'blur(4px)'
+                    }}>
+                      DISASTER COMMAND CENTER
+                    </span>
+                  </div>
+                  <p style={{ margin: 0, color: '#e0f2fe', fontSize: '13px', lineHeight: '1.5' }}>
+                    Agency: <strong style={{ color: '#ffffff' }}>{officerInfo?.department || 'NDRF Coastal Operations'}</strong> • Designation: <strong style={{ color: '#ffffff' }}>{officerInfo?.designation || 'Zonal Mitigation Officer'}</strong> • Official ID: <span style={{ fontFamily: 'var(--font-mono, monospace)', color: '#fef08a', fontWeight: 700 }}>{officerInfo?.govId || 'NDRF-7483'}</span>
+                  </p>
+
+                  {/* Mode Tabs inside Sky Blue Banner */}
+                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '16px' }}>
+                    <button
+                      onClick={() => { setDisasterSubTab('overview'); setActiveSidebarItem('Dashboard'); }}
+                      style={{
+                        padding: '7px 14px',
+                        borderRadius: '8px',
+                        fontSize: '12px',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        background: '#ffffff',
+                        color: '#0369a1',
+                        border: '1px solid #ffffff',
+                        boxShadow: '0 2px 6px rgba(0, 0, 0, 0.1)'
+                      }}
+                    >
+                      📊 Command Overview
+                    </button>
+                    <button
+                      onClick={() => { setDisasterSubTab('digital_twin'); setActiveSidebarItem('Digital Twin'); }}
+                      style={{
+                        padding: '7px 14px',
+                        borderRadius: '8px',
+                        fontSize: '12px',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        background: 'rgba(255, 255, 255, 0.22)',
+                        color: '#ffffff',
+                        border: '1px solid rgba(255, 255, 255, 0.45)',
+                        backdropFilter: 'blur(4px)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '5px'
+                      }}
+                    >
+                      <span>🌐</span> Digital Twin Simulator
+                    </button>
+                    <button
+                      onClick={() => { setDisasterSubTab('weather'); setActiveSidebarItem('Weather Forecast'); }}
+                      style={{
+                        padding: '7px 14px',
+                        borderRadius: '8px',
+                        fontSize: '12px',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        background: 'rgba(255, 255, 255, 0.22)',
+                        color: '#ffffff',
+                        border: '1px solid rgba(255, 255, 255, 0.45)',
+                        backdropFilter: 'blur(4px)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '5px'
+                      }}
+                    >
+                      <span>⛅</span> Weather Surveillance
+                    </button>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  {officerInfo?.idCardPhoto && (
+                    <img
+                      src={officerInfo.idCardPhoto}
+                      alt="Officer ID Badge"
+                      style={{
+                        width: '52px',
+                        height: '52px',
+                        borderRadius: '10px',
+                        objectFit: 'cover',
+                        border: '2px solid #ffffff',
+                        boxShadow: '0 4px 12px rgba(0,0,0,0.2)'
+                      }}
+                    />
+                  )}
+                  <div
+                    style={{
+                      background: 'rgba(255, 255, 255, 0.18)',
+                      border: '1px solid rgba(255, 255, 255, 0.35)',
+                      borderRadius: '12px',
+                      padding: '10px 14px',
+                      textAlign: 'right',
+                      backdropFilter: 'blur(8px)'
+                    }}
+                  >
+                    <div style={{ fontSize: '11px', color: '#bae6fd', textTransform: 'uppercase', fontWeight: 700 }}>Emergency Operations</div>
+                    <div style={{ fontSize: '13px', fontWeight: 800, color: '#ffffff', display: 'flex', alignItems: 'center', gap: '6px', justifyContent: 'flex-end', marginTop: '2px' }}>
+                      <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#4ade80', boxShadow: '0 0 8px #4ade80' }}></span>
+                      Live Radar Online
+                    </div>
+                  </div>
+                </div>
               </div>
 
-              {/* 4 Metric Cards */}
-              <div className="dashboard-metrics-4">
-                <div className="dash-metric-card">
-                  <div className="metric-icon-box green-soft">
-                    <Shield size={20} />
+              {/* 2. Four Metric Cards in Sky Blue + White Theme */}
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))',
+                  gap: '16px'
+                }}
+              >
+                <div
+                  style={{
+                    background: '#ffffff',
+                    border: '1px solid #bae6fd',
+                    borderRadius: '14px',
+                    padding: '18px 20px',
+                    boxShadow: '0 4px 15px rgba(14, 165, 233, 0.06)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '14px'
+                  }}
+                >
+                  <div style={{
+                    width: '44px',
+                    height: '44px',
+                    borderRadius: '10px',
+                    background: '#f0fdf4',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: '#16a34a'
+                  }}>
+                    <Shield size={22} />
                   </div>
-                  <div className="metric-text-wrap">
-                    <span className="card-lbl">Cyclone Alert</span>
-                    <span className="card-val text-green">None</span>
+                  <div>
+                    <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 600, display: 'block', textTransform: 'uppercase' }}>
+                      Cyclone Alert
+                    </span>
+                    <span style={{ fontSize: '20px', fontWeight: 800, color: '#16a34a' }}>
+                      None
+                    </span>
                   </div>
                 </div>
 
-                <div className="dash-metric-card">
-                  <div className="metric-icon-box amber-soft">
-                    <AlertTriangle size={20} />
+                <div
+                  style={{
+                    background: '#ffffff',
+                    border: '1px solid #bae6fd',
+                    borderRadius: '14px',
+                    padding: '18px 20px',
+                    boxShadow: '0 4px 15px rgba(14, 165, 233, 0.06)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '14px'
+                  }}
+                >
+                  <div style={{
+                    width: '44px',
+                    height: '44px',
+                    borderRadius: '10px',
+                    background: '#fef3c7',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: '#d97706'
+                  }}>
+                    <AlertTriangle size={22} />
                   </div>
-                  <div className="metric-text-wrap">
-                    <span className="card-lbl">High Wave Alert</span>
-                    <span className="card-val text-amber">1 Active</span>
+                  <div>
+                    <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 600, display: 'block', textTransform: 'uppercase' }}>
+                      High Wave Alert
+                    </span>
+                    <span style={{ fontSize: '20px', fontWeight: 800, color: '#d97706' }}>
+                      1 Active
+                    </span>
                   </div>
                 </div>
 
-                <div className="dash-metric-card">
-                  <div className="metric-icon-box blue-soft">
-                    <MapPin size={20} />
+                <div
+                  style={{
+                    background: '#ffffff',
+                    border: '1px solid #bae6fd',
+                    borderRadius: '14px',
+                    padding: '18px 20px',
+                    boxShadow: '0 4px 15px rgba(14, 165, 233, 0.06)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '14px'
+                  }}
+                >
+                  <div style={{
+                    width: '44px',
+                    height: '44px',
+                    borderRadius: '10px',
+                    background: '#e0f2fe',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: '#0284c7'
+                  }}>
+                    <MapPin size={22} />
                   </div>
-                  <div className="metric-text-wrap">
-                    <span className="card-lbl">Affected Districts</span>
-                    <span className="card-val">0</span>
+                  <div>
+                    <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 600, display: 'block', textTransform: 'uppercase' }}>
+                      Affected Districts
+                    </span>
+                    <span style={{ fontSize: '20px', fontWeight: 800, color: '#0f172a' }}>
+                      0
+                    </span>
                   </div>
                 </div>
 
-                <div className="dash-metric-card">
-                  <div className="metric-icon-box green-soft">
-                    <Activity size={20} />
+                <div
+                  style={{
+                    background: '#ffffff',
+                    border: '1px solid #bae6fd',
+                    borderRadius: '14px',
+                    padding: '18px 20px',
+                    boxShadow: '0 4px 15px rgba(14, 165, 233, 0.06)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '14px'
+                  }}
+                >
+                  <div style={{
+                    width: '44px',
+                    height: '44px',
+                    borderRadius: '10px',
+                    background: '#f0fdf4',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: '#16a34a'
+                  }}>
+                    <Activity size={22} />
                   </div>
-                  <div className="metric-text-wrap">
-                    <span className="card-lbl">Overall Risk</span>
-                    <span className="card-val text-green">Low</span>
+                  <div>
+                    <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 600, display: 'block', textTransform: 'uppercase' }}>
+                      Overall Risk
+                    </span>
+                    <span style={{ fontSize: '20px', fontWeight: 800, color: '#16a34a' }}>
+                      Low
+                    </span>
                   </div>
                 </div>
               </div>
 
-              {/* Cyclone & Weather Monitoring */}
-              <div className="dash-section-card">
-                <div className="card-header-row">
-                  <h3>Cyclone & Weather Monitoring</h3>
-                  <a href="#full-cyclone" className="card-action-link">View Full Map</a>
+              {/* 3. Cyclone & Weather Monitoring Card (Sky Blue & White Theme) */}
+              <div
+                style={{
+                  background: '#ffffff',
+                  borderRadius: '16px',
+                  padding: '22px 24px',
+                  border: '1px solid #bae6fd',
+                  boxShadow: '0 4px 20px rgba(14, 165, 233, 0.08)'
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ fontSize: '18px' }}>🌪️</span>
+                    <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 800, color: '#0f172a' }}>
+                      Cyclone & Weather Monitoring
+                    </h3>
+                  </div>
+                  <button
+                    onClick={() => { setDisasterSubTab('digital_twin'); setActiveSidebarItem('Digital Twin'); }}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      fontSize: '12px',
+                      fontWeight: 700,
+                      color: '#0284c7',
+                      background: '#f0f9ff',
+                      border: '1px solid #bae6fd',
+                      padding: '5px 12px',
+                      borderRadius: '6px',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    Open Digital Twin Simulator →
+                  </button>
                 </div>
 
-                <div className="cyclone-map-box">
+                <div className="cyclone-map-box" style={{ borderRadius: '12px', overflow: 'hidden', border: '1px solid #bae6fd' }}>
                   <svg viewBox="0 0 800 240" className="map-svg-canvas">
                     <defs>
+                      <linearGradient id="oceanBgGrad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#0369a1" />
+                        <stop offset="100%" stopColor="#082f49" />
+                      </linearGradient>
                       <radialGradient id="vortexGrad" cx="75%" cy="60%" r="40%">
-                        <stop offset="0%" stopColor="#ef4444" stopOpacity="0.8" />
-                        <stop offset="40%" stopColor="#f59e0b" stopOpacity="0.6" />
-                        <stop offset="80%" stopColor="#0284c7" stopOpacity="0.4" />
-                        <stop offset="100%" stopColor="#082f49" stopOpacity="0.2" />
+                        <stop offset="0%" stopColor="#ef4444" stopOpacity="0.85" />
+                        <stop offset="40%" stopColor="#f59e0b" stopOpacity="0.65" />
+                        <stop offset="80%" stopColor="#38bdf8" stopOpacity="0.4" />
+                        <stop offset="100%" stopColor="#0369a1" stopOpacity="0.2" />
                       </radialGradient>
                     </defs>
-                    <rect width="800" height="240" fill="#082f49" />
+                    <rect width="800" height="240" fill="url(#oceanBgGrad)" />
                     {/* India Map Outline */}
                     <path
                       d="M 280 20 L 320 80 L 360 140 L 420 180 L 460 210 L 480 180 L 530 120 L 600 80 L 640 60 Z"
                       fill="#1e293b"
+                      stroke="#38bdf8"
+                      strokeWidth="1"
                     />
-                    <text x="440" y="100" fill="#94a3b8" fontSize="13" fontWeight="bold">INDIA</text>
-                    <text x="240" y="140" fill="#38bdf8" fontSize="11">Arabian Sea</text>
-                    <text x="620" y="170" fill="#38bdf8" fontSize="11">Bay of Bengal</text>
+                    <text x="440" y="100" fill="#cbd5e1" fontSize="13" fontWeight="bold">INDIA</text>
+                    <text x="240" y="140" fill="#7dd3fc" fontSize="11" fontWeight="600">Arabian Sea</text>
+                    <text x="620" y="170" fill="#7dd3fc" fontSize="11" fontWeight="600">Bay of Bengal</text>
 
                     {/* Cyclone Vortex */}
                     <circle cx="680" cy="150" r="70" fill="url(#vortexGrad)" />
@@ -1164,10 +1619,10 @@ export const RoleDashboards: React.FC<RoleDashboardsProps> = ({
                   </svg>
 
                   {/* Wind speed colorbar scale */}
-                  <div className="wind-speed-scale">
-                    <span className="scale-title">Wind Speed (km/h)</span>
+                  <div className="wind-speed-scale" style={{ background: 'rgba(255, 255, 255, 0.95)', border: '1px solid #bae6fd', color: '#0f172a' }}>
+                    <span className="scale-title" style={{ color: '#0369a1', fontWeight: 700 }}>Wind Speed (km/h)</span>
                     <div className="wind-colorbar-strip"></div>
-                    <div className="wind-scale-numbers">
+                    <div className="wind-scale-numbers" style={{ color: '#475569', fontWeight: 600 }}>
                       <span>0</span>
                       <span>30</span>
                       <span>60</span>
@@ -1178,35 +1633,367 @@ export const RoleDashboards: React.FC<RoleDashboardsProps> = ({
                 </div>
               </div>
 
-              {/* Latest Warnings */}
-              <div className="dash-section-card">
-                <div className="card-header-row">
-                  <h3>Latest Warnings</h3>
-                  <a href="#all-warnings" className="card-action-link">View All</a>
+              {/* 4. Latest Warnings (Sky Blue & White Theme) */}
+              <div
+                style={{
+                  background: '#ffffff',
+                  borderRadius: '16px',
+                  padding: '22px 24px',
+                  border: '1px solid #bae6fd',
+                  boxShadow: '0 4px 20px rgba(14, 165, 233, 0.08)'
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ fontSize: '18px' }}>🔔</span>
+                    <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 800, color: '#0f172a' }}>
+                      Latest Warnings & Bulletins
+                    </h3>
+                  </div>
+                  <span style={{ fontSize: '12px', fontWeight: 600, color: '#0284c7' }}>
+                    Updated 2m ago • Live INCOIS Feed
+                  </span>
                 </div>
 
                 <div className="recent-alerts-list">
-                  <div className="alert-row">
+                  <div className="alert-row" style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '12px 16px' }}>
                     <span className="alert-icon-wrap amber"><AlertTriangle size={14} /></span>
-                    <span className="alert-title-text">Moderate sea conditions expected along Maharashtra coast</span>
-                    <span className="alert-time font-mono">06 Sep 2026, 08:30</span>
+                    <span className="alert-title-text" style={{ color: '#1e293b' }}>Moderate sea conditions expected along Maharashtra & Gujarat coast</span>
+                    <span className="alert-time font-mono" style={{ color: '#64748b' }}>06 Sep 2026, 08:30</span>
                   </div>
-                  <div className="alert-row">
-                    <span className="alert-icon-wrap blue"><Shield size={14} /></span>
-                    <span className="alert-title-text">No active cyclone in the North Indian Ocean</span>
-                    <span className="alert-time font-mono">06 Sep 2026, 06:00</span>
+                  <div className="alert-row" style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '12px 16px' }}>
+                    <span className="alert-icon-wrap blue" style={{ background: '#e0f2fe', color: '#0284c7' }}><Shield size={14} /></span>
+                    <span className="alert-title-text" style={{ color: '#1e293b' }}>No active cyclone in the North Indian Ocean basin</span>
+                    <span className="alert-time font-mono" style={{ color: '#64748b' }}>06 Sep 2026, 06:00</span>
                   </div>
-                  <div className="alert-row">
-                    <span className="alert-icon-wrap blue"><CloudSun size={14} /></span>
-                    <span className="alert-title-text">Routine weather advisory for coastal regions</span>
-                    <span className="alert-time font-mono">05 Sep 2026, 18:20</span>
+                  <div className="alert-row" style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '12px 16px' }}>
+                    <span className="alert-icon-wrap blue" style={{ background: '#e0f2fe', color: '#0284c7' }}><CloudSun size={14} /></span>
+                    <span className="alert-title-text" style={{ color: '#1e293b' }}>Routine weather advisory issued for coastal districts</span>
+                    <span className="alert-time font-mono" style={{ color: '#64748b' }}>05 Sep 2026, 18:20</span>
                   </div>
                 </div>
               </div>
             </div>
           )}
-        </main>
+
+          {/* Sub-view D: Early Warnings & Hazard Bulletins (Sky Blue + White Theme) */}
+          {currentRole === 'Disaster Management' && activeSidebarItem === 'Early Warnings' && (
+            <div className="role-view-content" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+              <div
+                style={{
+                  background: 'linear-gradient(135deg, #0284c7 0%, #0ea5e9 45%, #38bdf8 100%)',
+                  borderRadius: '16px',
+                  padding: '24px 28px',
+                  color: '#ffffff',
+                  boxShadow: '0 10px 25px -5px rgba(14, 165, 233, 0.35)',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  flexWrap: 'wrap',
+                  gap: '16px'
+                }}
+              >
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
+                    <span style={{ fontSize: '24px' }}>🔔</span>
+                    <h2 style={{ margin: 0, fontSize: '24px', fontWeight: 800, color: '#ffffff' }}>
+                      Coastal Hazard Early Warnings & Advisory Bulletins
+                    </h2>
+                  </div>
+                  <p style={{ margin: 0, color: '#e0f2fe', fontSize: '13px' }}>
+                    Live official bulletins aggregated from INCOIS Ocean State Forecast (OSF) and IMD Cyclone Warning Division.
+                  </p>
+                </div>
+                <button
+                  onClick={() => alert('Broadcast Alert sent to Coastal Warning Sirens and SMS Gateway!')}
+                  style={{
+                    padding: '8px 16px',
+                    borderRadius: '8px',
+                    background: '#ffffff',
+                    color: '#0284c7',
+                    border: 'none',
+                    fontSize: '13px',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
+                  }}
+                >
+                  ⚡ Trigger Siren & SMS Broadcast
+                </button>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '16px' }}>
+                <div style={{ background: '#ffffff', border: '1px solid #bae6fd', borderRadius: '14px', padding: '20px', boxShadow: '0 4px 15px rgba(14,165,233,0.06)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                    <span style={{ background: '#fee2e2', color: '#dc2626', padding: '2px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 800 }}>STAGE-3 WARNING</span>
+                    <span style={{ fontSize: '11px', color: '#64748b' }}>06 Sep, 10:00 AM</span>
+                  </div>
+                  <h4 style={{ margin: '0 0 6px 0', fontSize: '15px', color: '#0f172a' }}>Palk Bay & Gulf of Mannar High Wave Advisory</h4>
+                  <p style={{ margin: 0, fontSize: '12px', color: '#475569', lineHeight: '1.5' }}>
+                    Waves reaching 3.8m to 4.5m with high swell periods (14s). Total suspension of fishing operations advised within 25 nautical miles of coastline.
+                  </p>
+                </div>
+
+                <div style={{ background: '#ffffff', border: '1px solid #bae6fd', borderRadius: '14px', padding: '20px', boxShadow: '0 4px 15px rgba(14,165,233,0.06)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                    <span style={{ background: '#fef3c7', color: '#d97706', padding: '2px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 800 }}>STAGE-2 ALERT</span>
+                    <span style={{ fontSize: '11px', color: '#64748b' }}>06 Sep, 08:30 AM</span>
+                  </div>
+                  <h4 style={{ margin: '0 0 6px 0', fontSize: '15px', color: '#0f172a' }}>Swell Surge Notice: Maharashtra Coastal Belt</h4>
+                  <p style={{ margin: 0, fontSize: '12px', color: '#475569', lineHeight: '1.5' }}>
+                    Low-lying beaches in Ratnagiri and Sindhudurg may experience spring-tide inundation. Harbors advised to double mooring lines for trawlers.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Sub-view E: Cyclone Tracking Trajectory Radar (Sky Blue + White Theme) */}
+          {currentRole === 'Disaster Management' && activeSidebarItem === 'Cyclone Tracking' && (
+            <div className="role-view-content" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+              <div
+                style={{
+                  background: 'linear-gradient(135deg, #0284c7 0%, #0ea5e9 45%, #38bdf8 100%)',
+                  borderRadius: '16px',
+                  padding: '24px 28px',
+                  color: '#ffffff',
+                  boxShadow: '0 10px 25px -5px rgba(14, 165, 233, 0.35)'
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
+                  <span style={{ fontSize: '24px' }}>🌪️</span>
+                  <h2 style={{ margin: 0, fontSize: '24px', fontWeight: 800, color: '#ffffff' }}>
+                    Doppler Cyclone Radar & Trajectory Cone
+                  </h2>
+                </div>
+                <p style={{ margin: 0, color: '#e0f2fe', fontSize: '13px' }}>
+                  Live radar telemetry & eye tracking for North Indian Ocean cyclonic disturbances.
+                </p>
+              </div>
+
+              <div style={{ background: '#ffffff', border: '1px solid #bae6fd', borderRadius: '16px', padding: '22px 24px', boxShadow: '0 4px 20px rgba(14,165,233,0.08)' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '14px', marginBottom: '18px' }}>
+                  <div style={{ background: '#f0f9ff', padding: '14px', borderRadius: '10px', border: '1px solid #bae6fd' }}>
+                    <div style={{ fontSize: '11px', color: '#0369a1', fontWeight: 700 }}>STORM INTENSITY</div>
+                    <div style={{ fontSize: '20px', fontWeight: 800, color: '#0f172a' }}>Cat-2 Severe</div>
+                  </div>
+                  <div style={{ background: '#f0f9ff', padding: '14px', borderRadius: '10px', border: '1px solid #bae6fd' }}>
+                    <div style={{ fontSize: '11px', color: '#0369a1', fontWeight: 700 }}>CENTRAL PRESSURE</div>
+                    <div style={{ fontSize: '20px', fontWeight: 800, color: '#0f172a' }}>982 hPa</div>
+                  </div>
+                  <div style={{ background: '#f0f9ff', padding: '14px', borderRadius: '10px', border: '1px solid #bae6fd' }}>
+                    <div style={{ fontSize: '11px', color: '#0369a1', fontWeight: 700 }}>SUSTAINED WINDS</div>
+                    <div style={{ fontSize: '20px', fontWeight: 800, color: '#0284c7' }}>115 km/h</div>
+                  </div>
+                  <div style={{ background: '#f0f9ff', padding: '14px', borderRadius: '10px', border: '1px solid #bae6fd' }}>
+                    <div style={{ fontSize: '11px', color: '#0369a1', fontWeight: 700 }}>ESTIMATED LANDFALL</div>
+                    <div style={{ fontSize: '20px', fontWeight: 800, color: '#d97706' }}>T + 18 hrs</div>
+                  </div>
+                </div>
+
+                <div style={{ borderRadius: '12px', overflow: 'hidden', border: '1px solid #bae6fd', background: '#082f49', height: '260px', position: 'relative' }}>
+                  <svg viewBox="0 0 800 260" style={{ width: '100%', height: '100%' }}>
+                    <rect width="800" height="260" fill="#0c4a6e" opacity="0.6" />
+                    <path d="M 240 20 L 280 90 L 320 150 L 380 190 L 440 220 L 480 190 L 540 120 Z" fill="#1e293b" stroke="#38bdf8" strokeWidth="1.5" />
+                    <text x="360" y="110" fill="#94a3b8" fontSize="14" fontWeight="bold">INDIA</text>
+                    {/* Trajectory Cone */}
+                    <polygon points="680,180 500,120 520,200" fill="#38bdf8" opacity="0.25" />
+                    <path d="M 680 180 Q 580 160 510 160" stroke="#f59e0b" strokeWidth="3" fill="none" strokeDasharray="6,4" />
+                    <circle cx="680" cy="180" r="28" fill="#ef4444" opacity="0.4" />
+                    <circle cx="680" cy="180" r="6" fill="#ffffff" />
+                    <text x="610" y="140" fill="#ffffff" fontSize="12" fontWeight="bold">Cyclone Eye: 10.4°N, 81.8°E</text>
+                  </svg>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Sub-view F: Coast Guard Fleet & Vessel Monitoring (Sky Blue + White Theme) */}
+          {currentRole === 'Disaster Management' && activeSidebarItem === 'Vessel Monitoring' && (
+            <div className="role-view-content" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+              <div
+                style={{
+                  background: 'linear-gradient(135deg, #0284c7 0%, #0ea5e9 45%, #38bdf8 100%)',
+                  borderRadius: '16px',
+                  padding: '24px 28px',
+                  color: '#ffffff',
+                  boxShadow: '0 10px 25px -5px rgba(14, 165, 233, 0.35)'
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
+                  <span style={{ fontSize: '24px' }}>🚢</span>
+                  <h2 style={{ margin: 0, fontSize: '24px', fontWeight: 800, color: '#ffffff' }}>
+                    Maritime Vessel Telemetry & Search & Rescue Surveillance
+                  </h2>
+                </div>
+                <p style={{ margin: 0, color: '#e0f2fe', fontSize: '13px' }}>
+                  Real-time AIS tracking of fishing fleet, emergency beacons, and Coast Guard patrol assets in coastal waters.
+                </p>
+              </div>
+
+              <div style={{ background: '#ffffff', border: '1px solid #bae6fd', borderRadius: '16px', padding: '22px 24px', boxShadow: '0 4px 20px rgba(14,165,233,0.08)' }}>
+                <h4 style={{ margin: '0 0 14px 0', fontSize: '16px', color: '#0f172a' }}>Monitored Crafts in Disaster Sector</h4>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  {[
+                    { name: 'M/V Matsya Sugandhi', reg: 'IND-TN-04-MM-1204', type: 'Mechanized Trawler', dist: '4.8 km offshore', crew: 6, status: 'Returning to Port', alert: false },
+                    { name: 'Sea Queen II', reg: 'IND-TN-02-MM-4019', type: 'Motorized Gillnetter', dist: '2.1 km offshore', crew: 4, status: 'Navigating to Basin', alert: false },
+                    { name: 'Sagar Kanya', reg: 'IND-TN-08-MM-0884', type: 'Traditional FRP', dist: '0.6 km (In-Creek)', crew: 3, status: 'Moored Safe', alert: false },
+                    { name: 'ICGS Varad', reg: 'CG-881', type: 'Fast Patrol Vessel', dist: '8.2 km patrol line', crew: 24, status: 'Active Escort Standby', alert: false }
+                  ].map((v, i) => (
+                    <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f8fafc', padding: '12px 16px', borderRadius: '10px', border: '1px solid #e2e8f0', flexWrap: 'wrap', gap: '8px' }}>
+                      <div>
+                        <strong style={{ fontSize: '13px', color: '#0f172a' }}>{v.name}</strong>
+                        <span style={{ fontSize: '11px', color: '#64748b', marginLeft: '8px' }}>({v.reg} • {v.type})</span>
+                        <div style={{ fontSize: '11px', color: '#0284c7', marginTop: '2px' }}>📍 {v.dist} • Crew: {v.crew}</div>
+                      </div>
+                      <span style={{ background: '#e0f2fe', color: '#0284c7', padding: '3px 10px', borderRadius: '9999px', fontSize: '11px', fontWeight: 700 }}>
+                        {v.status}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Sub-view G: Hazard Inundation Risk Maps (Sky Blue + White Theme) */}
+          {currentRole === 'Disaster Management' && activeSidebarItem === 'Risk Maps' && (
+            <div className="role-view-content" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+              <div
+                style={{
+                  background: 'linear-gradient(135deg, #0284c7 0%, #0ea5e9 45%, #38bdf8 100%)',
+                  borderRadius: '16px',
+                  padding: '24px 28px',
+                  color: '#ffffff',
+                  boxShadow: '0 10px 25px -5px rgba(14, 165, 233, 0.35)'
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
+                  <span style={{ fontSize: '24px' }}>🗺️</span>
+                  <h2 style={{ margin: 0, fontSize: '24px', fontWeight: 800, color: '#ffffff' }}>
+                    Coastal Vulnerability & Storm Surge Inundation Risk Maps
+                  </h2>
+                </div>
+                <p style={{ margin: 0, color: '#e0f2fe', fontSize: '13px' }}>
+                  Multi-hazard vulnerability zones categorized by elevation, seawall barrier crest, and population density.
+                </p>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px' }}>
+                <div style={{ background: '#ffffff', border: '1px solid #bae6fd', borderRadius: '14px', padding: '20px', boxShadow: '0 4px 15px rgba(14,165,233,0.06)' }}>
+                  <h4 style={{ margin: '0 0 10px 0', fontSize: '15px', color: '#0f172a' }}>Zone 1: Extreme Inundation (&lt;1.5m Elevation)</h4>
+                  <p style={{ fontSize: '12px', color: '#64748b', margin: '0 0 12px 0' }}>Immediate mandatory evacuation zone during surge events over 2.0m.</p>
+                  <div style={{ fontSize: '12px', fontWeight: 700, color: '#dc2626' }}>🚨 14 Fishing Hamlets • 18,400 Residents</div>
+                </div>
+                <div style={{ background: '#ffffff', border: '1px solid #bae6fd', borderRadius: '14px', padding: '20px', boxShadow: '0 4px 15px rgba(14,165,233,0.06)' }}>
+                  <h4 style={{ margin: '0 0 10px 0', fontSize: '15px', color: '#0f172a' }}>Zone 2: Buffer Coastal Plain (1.5m - 3.5m)</h4>
+                  <p style={{ fontSize: '12px', color: '#64748b', margin: '0 0 12px 0' }}>Precautionary stage-1 alert zone. Livestock and small craft relocation.</p>
+                  <div style={{ fontSize: '12px', fontWeight: 700, color: '#d97706' }}>⚠️ 8 Village Panchayats • 22,100 Residents</div>
+                </div>
+                <div style={{ background: '#ffffff', border: '1px solid #bae6fd', borderRadius: '14px', padding: '20px', boxShadow: '0 4px 15px rgba(14,165,233,0.06)' }}>
+                  <h4 style={{ margin: '0 0 10px 0', fontSize: '15px', color: '#0f172a' }}>Zone 3: Elevated Cyclone Shelters (&gt;4.0m)</h4>
+                  <p style={{ fontSize: '12px', color: '#64748b', margin: '0 0 12px 0' }}>Designated multi-purpose cyclone shelters equipped with emergency power and dewatering units.</p>
+                  <div style={{ fontSize: '12px', fontWeight: 700, color: '#16a34a' }}>🛡️ 6 Shelters Active • 14,000 Capacity</div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Sub-view H: EOC Incident Reports & SITREPs (Sky Blue + White Theme) */}
+          {currentRole === 'Disaster Management' && activeSidebarItem === 'Incident Reports' && (
+            <div className="role-view-content" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+              <div
+                style={{
+                  background: 'linear-gradient(135deg, #0284c7 0%, #0ea5e9 45%, #38bdf8 100%)',
+                  borderRadius: '16px',
+                  padding: '24px 28px',
+                  color: '#ffffff',
+                  boxShadow: '0 10px 25px -5px rgba(14, 165, 233, 0.35)'
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
+                  <span style={{ fontSize: '24px' }}>📑</span>
+                  <h2 style={{ margin: 0, fontSize: '24px', fontWeight: 800, color: '#ffffff' }}>
+                    Emergency Operations Center (EOC) Incident Log & SITREPs
+                  </h2>
+                </div>
+                <p style={{ margin: 0, color: '#e0f2fe', fontSize: '13px' }}>
+                  Official maritime emergency logs, search & rescue tasking, and relief operations records.
+                </p>
+              </div>
+
+              <div style={{ background: '#ffffff', border: '1px solid #bae6fd', borderRadius: '16px', padding: '22px 24px', boxShadow: '0 4px 20px rgba(14,165,233,0.08)' }}>
+                <h4 style={{ margin: '0 0 14px 0', fontSize: '16px', color: '#0f172a' }}>Live Incident Incident Register (Last 24 Hours)</h4>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  <div style={{ background: '#f8fafc', padding: '14px 18px', borderRadius: '10px', border: '1px solid #e2e8f0', borderLeft: '4px solid #16a34a' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                      <strong style={{ fontSize: '13px', color: '#0f172a' }}>#NDRF-2026-041: Pre-Emptive Harbor Haul-Up Order Executed</strong>
+                      <span style={{ fontSize: '11px', color: '#16a34a', fontWeight: 700 }}>RESOLVED</span>
+                    </div>
+                    <p style={{ margin: 0, fontSize: '12px', color: '#64748b' }}>
+                      142 Mechanized boats at Rameswaram South Jetty berthed and tied off safely. Zero damage reported.
+                    </p>
+                  </div>
+                  <div style={{ background: '#f8fafc', padding: '14px 18px', borderRadius: '10px', border: '1px solid #e2e8f0', borderLeft: '4px solid #0284c7' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                      <strong style={{ fontSize: '13px', color: '#0f172a' }}>#NDRF-2026-042: High Swell Inundation along Danushkodi Causeway</strong>
+                      <span style={{ fontSize: '11px', color: '#0284c7', fontWeight: 700 }}>MONITORING</span>
+                    </div>
+                    <p style={{ margin: 0, fontSize: '12px', color: '#64748b' }}>
+                      Water depth 0.2m over low-lying road. Traffic redirected. NDRF Battalion 4 deployed with high-capacity pumps.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Sub-view I: Disaster Management Settings (Sky Blue + White Theme) */}
+          {currentRole === 'Disaster Management' && activeSidebarItem === 'Settings' && (
+            <div className="role-view-content" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+              <div
+                style={{
+                  background: 'linear-gradient(135deg, #0284c7 0%, #0ea5e9 45%, #38bdf8 100%)',
+                  borderRadius: '16px',
+                  padding: '24px 28px',
+                  color: '#ffffff',
+                  boxShadow: '0 10px 25px -5px rgba(14, 165, 233, 0.35)'
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
+                  <span style={{ fontSize: '24px' }}>⚙️</span>
+                  <h2 style={{ margin: 0, fontSize: '24px', fontWeight: 800, color: '#ffffff' }}>
+                    Disaster Management Console Configuration
+                  </h2>
+                </div>
+                <p style={{ margin: 0, color: '#e0f2fe', fontSize: '13px' }}>
+                  Official agency credentials, siren trigger thresholds, and emergency SMS gateway bindings.
+                </p>
+              </div>
+
+              <div style={{ background: '#ffffff', border: '1px solid #bae6fd', borderRadius: '16px', padding: '22px 24px', boxShadow: '0 4px 20px rgba(14,165,233,0.08)' }}>
+                <h4 style={{ margin: '0 0 14px 0', fontSize: '16px', color: '#0f172a' }}>Agency Identity & Credentials</h4>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '14px', fontSize: '13px' }}>
+                  <div style={{ background: '#f8fafc', padding: '12px 14px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                    <span style={{ color: '#64748b', display: 'block', fontSize: '11px' }}>Designated Agency:</span>
+                    <strong style={{ color: '#0f172a' }}>NDRF Coastal Operations</strong>
+                  </div>
+                  <div style={{ background: '#f8fafc', padding: '12px 14px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                    <span style={{ color: '#64748b', display: 'block', fontSize: '11px' }}>Officer Designation:</span>
+                    <strong style={{ color: '#0f172a' }}>Superintendent of Disaster Operations</strong>
+                  </div>
+                  <div style={{ background: '#f8fafc', padding: '12px 14px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                    <span style={{ color: '#64748b', display: 'block', fontSize: '11px' }}>Official ID Badge:</span>
+                    <strong style={{ color: '#0284c7' }}>NDRF-7483</strong>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+      </main>
       </div>
     </div>
+    )}
+    </>
   )
 }

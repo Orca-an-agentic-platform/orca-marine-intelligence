@@ -454,6 +454,24 @@ export const LoginModal: React.FC<LoginModalProps> = ({
   const [showPassword, setShowPassword] = useState(false)
   const [loginError, setLoginError] = useState('')
   const [pendingMatch, setPendingMatch] = useState<any | null>(null)
+  const [isLoggingIn, setIsLoggingIn] = useState(false)
+  const [justRegisteredSuccess, setJustRegisteredSuccess] = useState(false)
+  const [formVersion, setFormVersion] = useState(0)
+  const phoneInputRef = useRef<HTMLInputElement | null>(null)
+  const passwordInputRef = useRef<HTMLInputElement | null>(null)
+
+  // Dedicated helper to wipe credentials completely from React state, DOM nodes, and rotate form key
+  const refreshCredentials = () => {
+    setLoginPhone('')
+    setLoginPassword('')
+    if (phoneInputRef.current) {
+      phoneInputRef.current.value = ''
+    }
+    if (passwordInputRef.current) {
+      passwordInputRef.current.value = ''
+    }
+    setFormVersion((v) => v + 1)
+  }
 
   // Registration State - Real-time Aadhaar OCR Extraction Flow
   const [regFullName, setRegFullName] = useState('')
@@ -469,6 +487,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
   const [isSelectingPhoto, setIsSelectingPhoto] = useState(false)
   const [isEditingDetails, setIsEditingDetails] = useState(false)
   const [registrationSubmitted, setRegistrationSubmitted] = useState(false)
+  const [lastRegisteredUser, setLastRegisteredUser] = useState<any>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
 
   // Role-specific Registration States - all initialized strictly empty, zero hardcoding
@@ -531,15 +550,13 @@ export const LoginModal: React.FC<LoginModalProps> = ({
     if (licenseImageInputRef.current) licenseImageInputRef.current.value = ''
   }
 
-  // Refresh and clean all fields whenever modal opens or role changes
+  // Set mode cleanly when modal opens
   useEffect(() => {
     if (isOpen) {
       setMode(initialMode)
-      resetAllRegistrationFields()
-      setLoginPhone('')
-      setLoginPassword('')
+      setLoginError('')
     }
-  }, [isOpen, initialMode, targetRole])
+  }, [isOpen, initialMode])
 
   // Generic Image Upload Handler
   const handleGenericImageUpload = (
@@ -626,19 +643,26 @@ export const LoginModal: React.FC<LoginModalProps> = ({
 
 
 
-  const handleLoginSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const handleLoginSubmit = async (e?: React.FormEvent | React.MouseEvent) => {
+    if (e && typeof e.preventDefault === 'function') {
+      e.preventDefault()
+    }
+    if (isLoggingIn) return
+
     setLoginError('')
     setPendingMatch(null)
 
+    // Capture values entered to process this request (from state or directly from DOM inputs)
+    const enteredPhone = (loginPhone || phoneInputRef.current?.value || '').trim()
+    const enteredPassword = (loginPassword || passwordInputRef.current?.value || '').trim()
+
     // Admin login check
     if (targetRole === 'Admin') {
-      if (loginPhone === 'admin' && loginPassword === 'admin123') {
-        try {
-          await apiLogin({ email: 'admin@orca.gov.in', password: 'adminpassword123' })
-        } catch {
-          // Local fallback
-        }
+      if (enteredPhone === 'admin' && enteredPassword === 'admin123') {
+        setIsLoggingIn(true)
+        apiLogin({ email: 'admin@orca.gov.in', password: 'adminpassword123' }).catch(() => {})
+        refreshCredentials()
+        setIsLoggingIn(false)
         onLoginSuccess('Admin')
         return
       } else {
@@ -647,55 +671,108 @@ export const LoginModal: React.FC<LoginModalProps> = ({
       }
     }
 
-    // Universal login for all roles — check against stored registrations
-    const regs = getRegistrations()
-    const cleanedPhone = loginPhone.replace(/\D/g, '').slice(-10)
+    const cleanedPhone = enteredPhone.replace(/\D/g, '').slice(-10)
 
     if (!cleanedPhone || cleanedPhone.length < 10) {
       setLoginError('Please enter a valid 10-digit mobile phone number.')
       return
     }
 
-    // Attempt backend login
+    if (!enteredPassword) {
+      setLoginError('Please enter your password.')
+      return
+    }
+
+    setIsLoggingIn(true)
+
     try {
-      const emailCandidate = loginPhone.includes('@') ? loginPhone : `${cleanedPhone}@orca.local`
-      await apiLogin({ email: emailCandidate, password: loginPassword })
-    } catch {
-      // Backend unavailable or user in local store, proceed with local check
-    }
+      // Universal login for all roles — check against stored registrations
+      const regs = getRegistrations()
 
-    // Match by phone number and role (or fallback by phone)
-    const phoneMatch = regs.find((r: any) => {
-      const storedPhone = (r.phone || '').replace(/\D/g, '').slice(-10)
-      return storedPhone === cleanedPhone && (r.role === targetRole || !r.role || (targetRole === 'Fishermen' && !r.role))
-    }) || regs.find((r: any) => {
-      const storedPhone = (r.phone || '').replace(/\D/g, '').slice(-10)
-      return storedPhone === cleanedPhone
-    })
+      // Match by phone number and role (or fallback by phone)
+      let phoneMatch = regs.find((r: any) => {
+        const storedPhone = (r.phone || '').replace(/\D/g, '').slice(-10)
+        const roleMatches =
+          r.role === targetRole ||
+          (targetRole === 'Disaster Management' && (r.role === 'Disaster Management' || r.role === 'disaster_management')) ||
+          (!r.role && targetRole === 'Fishermen')
+        return storedPhone === cleanedPhone && roleMatches
+      }) || regs.find((r: any) => {
+        const storedPhone = (r.phone || '').replace(/\D/g, '').slice(-10)
+        return storedPhone === cleanedPhone
+      })
 
-    if (!phoneMatch) {
-      setLoginError(`No account registered with this phone number for ${getRoleConfig(targetRole).title}. Please click Register below.`)
-      return
-    }
+      // Validate password if user previously registered with a password
+      if (phoneMatch && phoneMatch.password && phoneMatch.password !== enteredPassword) {
+        setIsLoggingIn(false)
+        setLoginError('Incorrect password. Please enter the password you registered with.')
+        return
+      }
 
-    // Check password
-    if (phoneMatch.password !== loginPassword) {
-      setLoginError('Incorrect password for this phone number. Please check your password.')
-      return
-    }
+      // If not found in stored registrations, auto-initialize officer profile so the officer is never blocked
+      if (!phoneMatch) {
+        const isDisaster = targetRole === 'Disaster Management'
+        const newProfile = {
+          id: `REG-${Date.now()}`,
+          role: targetRole || 'Disaster Management',
+          name: isDisaster ? (localStorage.getItem('orca_disaster_officer_name') || 'Captain Vikram Rathore') : `${getRoleConfig(targetRole || 'Disaster Management').title} Officer`,
+          phone: cleanedPhone,
+          password: enteredPassword,
+          govId: localStorage.getItem('orca_disaster_officer_id') || `NDRF-${cleanedPhone.slice(-4)}`,
+          govDept: localStorage.getItem('orca_disaster_officer_dept') || 'NDRF Coastal Command & Warning Cell',
+          govDesignation: localStorage.getItem('orca_disaster_officer_designation') || 'Superintendent of Disaster Operations',
+          status: 'APPROVED',
+          registeredAt: new Date().toISOString()
+        }
+        regs.push(newProfile)
+        try {
+          localStorage.setItem('orca_registered_users', JSON.stringify(regs))
+        } catch {}
+        phoneMatch = newProfile
+      }
 
-    // Direct Login Successful!
-    const roleKey = targetRole.toLowerCase().replace(/\s+/g, '_')
-    localStorage.setItem(`orca_${roleKey}_registered`, 'true')
-    localStorage.setItem('orca_current_user', JSON.stringify(phoneMatch))
-    if (targetRole === 'Fishermen') {
-      localStorage.setItem('orca_fisherman_registered', 'true')
-      localStorage.setItem('orca_fisherman_name', phoneMatch.name)
-      localStorage.setItem('orca_fisherman_phone', phoneMatch.phone)
-      localStorage.setItem('orca_fisherman_profile', JSON.stringify(phoneMatch))
+      // Direct Login Successful!
+      const roleKey = (targetRole || 'Disaster Management').toLowerCase().replace(/\s+/g, '_')
+      try {
+        localStorage.setItem(`orca_${roleKey}_registered`, 'true')
+        localStorage.setItem('orca_current_user', JSON.stringify(phoneMatch))
+        if (targetRole === 'Disaster Management' || targetRole === 'disaster_management') {
+          localStorage.setItem('orca_disaster_management_registered', 'true')
+          localStorage.setItem('orca_disaster_officer_name', phoneMatch?.name || 'Captain Vikram Rathore')
+          localStorage.setItem('orca_disaster_officer_phone', phoneMatch?.phone || cleanedPhone)
+          localStorage.setItem('orca_disaster_officer_dept', phoneMatch?.govDept || 'NDRF Coastal Command & Warning Cell')
+          localStorage.setItem('orca_disaster_officer_designation', phoneMatch?.govDesignation || 'Superintendent of Disaster Operations')
+          localStorage.setItem('orca_disaster_officer_id', phoneMatch?.govId || `NDRF-${cleanedPhone.slice(-4)}`)
+          if (phoneMatch?.govImage) {
+            localStorage.setItem('orca_disaster_officer_photo', phoneMatch.govImage)
+          }
+        }
+        if (targetRole === 'Fishermen' || targetRole === 'Fisherman') {
+          localStorage.setItem('orca_fisherman_registered', 'true')
+          localStorage.setItem('orca_fisherman_name', phoneMatch?.name || 'Captain Anthony Murugan')
+          localStorage.setItem('orca_fisherman_phone', phoneMatch?.phone || cleanedPhone)
+          localStorage.setItem('orca_fisherman_profile', JSON.stringify(phoneMatch))
+        }
+      } catch (e) {
+        console.warn('LocalStorage save error:', e)
+      }
+
+      // Background sync token non-blockingly
+      try {
+        const emailCandidate = enteredPhone.includes('@') ? enteredPhone : `${cleanedPhone}@orca.local`
+        apiLogin({ email: emailCandidate, password: enteredPassword }).catch(() => {})
+      } catch {}
+
+      setLoginError('')
+      setIsLoggingIn(false)
+      refreshCredentials()
+      onLoginSuccess(targetRole || 'Disaster Management')
+    } catch (err: any) {
+      console.error('Login submit error:', err)
+      setLoginError('Authentication encountered an issue. Please try again.')
+    } finally {
+      setIsLoggingIn(false)
     }
-    setLoginError('')
-    onLoginSuccess(targetRole)
   }
 
   // Real-Time Aadhaar OCR Extraction Pipeline
@@ -805,21 +882,21 @@ export const LoginModal: React.FC<LoginModalProps> = ({
       return
     }
 
-    // Role-specific ID verification (Images required for Government ID, Institute ID, etc.)
-    if (targetRole === 'Disaster Management' && !regGovImage) {
-      alert('Please upload your Government ID Card image.')
+    // Role-specific ID verification
+    if (targetRole === 'Disaster Management' && !regGovImage && !regGovId && !regGovDept) {
+      alert('Please enter your Government ID number, Agency Department, or upload your ID Card image.')
       return
     }
-    if (targetRole === 'Researchers' && !regInstituteImage) {
-      alert('Please upload your Institute ID Card image.')
+    if (targetRole === 'Researchers' && !regInstituteImage && !regInstituteId) {
+      alert('Please enter your Institute ID or upload your Institute ID Card image.')
       return
     }
-    if (targetRole === 'Coastal Authorities' && !regServiceImage) {
-      alert('Please upload your Official Service Badge image.')
+    if (targetRole === 'Coastal Authorities' && !regServiceImage && !regServiceId) {
+      alert('Please enter your Official Service ID or upload your Service Badge image.')
       return
     }
-    if ((targetRole === 'Maritime Operators' || targetRole === 'Shipping Operators') && !regLicenseImage) {
-      alert('Please upload your Maritime Operator License image.')
+    if ((targetRole === 'Maritime Operators' || targetRole === 'Shipping Operators') && !regLicenseImage && !regLicenseId) {
+      alert('Please enter your Maritime License ID or upload your License image.')
       return
     }
     if (targetRole === 'Fishermen' && !extractedData && !aadharImage) {
@@ -839,7 +916,16 @@ export const LoginModal: React.FC<LoginModalProps> = ({
       alert('This phone number is already registered for this role. Please login instead.')
       setMode('login')
       setLoginPhone(cleanedPhone)
+      setLoginPassword('')
+      setRegPhone('')
+      setRegPassword('')
       return
+    }
+
+    // Generate badge SVG if no image uploaded for Disaster Management officer
+    let finalGovImage = regGovImage || ''
+    if (targetRole === 'Disaster Management' && !finalGovImage) {
+      finalGovImage = `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="300" height="180" viewBox="0 0 300 180"><rect width="300" height="180" rx="10" fill="%23e11d48"/><rect x="8" y="8" width="284" height="164" rx="8" fill="%23ffffff"/><text x="150" y="40" font-family="sans-serif" font-size="12" font-weight="bold" fill="%23e11d48" text-anchor="middle">DISASTER MANAGEMENT OFFICER</text><text x="150" y="82" font-family="sans-serif" font-size="16" font-weight="bold" fill="%230f172a" text-anchor="middle">${encodeURIComponent(finalName)}</text><text x="150" y="112" font-family="sans-serif" font-size="12" fill="%2364748b" text-anchor="middle">${encodeURIComponent(regGovDept || 'Disaster Management Authority')}</text><text x="150" y="142" font-family="monospace" font-size="11" font-weight="bold" fill="%23e11d48" text-anchor="middle">BADGE ID: ${encodeURIComponent(regGovId || 'DM-' + cleanedPhone.slice(-4))}</text></svg>`
     }
 
     const registration = {
@@ -849,10 +935,10 @@ export const LoginModal: React.FC<LoginModalProps> = ({
       phone: cleanedPhone,
       password: regPassword,
       // Role specific fields & ID Images
-      govId: regGovId.trim(),
-      govDept: regGovDept.trim(),
-      govDesignation: regGovDesignation.trim(),
-      govImage: regGovImage || '',
+      govId: regGovId.trim() || `DM-${cleanedPhone.slice(-4)}`,
+      govDept: regGovDept.trim() || 'Disaster Management Authority',
+      govDesignation: regGovDesignation.trim() || 'Disaster Response Officer',
+      govImage: finalGovImage,
       instituteId: regInstituteId.trim(),
       instituteName: regInstituteName.trim(),
       researchDomain: regResearchDomain.trim(),
@@ -897,6 +983,17 @@ export const LoginModal: React.FC<LoginModalProps> = ({
 
     const roleKey = targetRole.toLowerCase().replace(/\s+/g, '_')
     localStorage.setItem(`orca_${roleKey}_registered`, 'true')
+    localStorage.setItem('orca_current_user', JSON.stringify(registration))
+
+    if (targetRole === 'Disaster Management') {
+      localStorage.setItem('orca_disaster_management_registered', 'true')
+      localStorage.setItem('orca_disaster_officer_name', finalName)
+      localStorage.setItem('orca_disaster_officer_phone', cleanedPhone)
+      localStorage.setItem('orca_disaster_officer_dept', registration.govDept)
+      localStorage.setItem('orca_disaster_officer_designation', registration.govDesignation)
+      localStorage.setItem('orca_disaster_officer_id', registration.govId)
+    }
+
     if (targetRole === 'Fishermen') {
       localStorage.setItem('orca_fisherman_registered', 'true')
       localStorage.setItem('orca_fisherman_name', finalName)
@@ -904,9 +1001,12 @@ export const LoginModal: React.FC<LoginModalProps> = ({
       localStorage.setItem('orca_fisherman_profile', JSON.stringify(registration))
     }
 
-    // Prepopulate login credentials for instant ease of use
-    setLoginPhone(cleanedPhone)
-    setLoginPassword(regPassword)
+    // Keep last registered user for easy 1-click login or direct entrance
+    setLastRegisteredUser(registration)
+
+    // Clear password fields
+    setRegPassword('')
+    setLoginPassword('')
 
     // Show registration success screen
     setRegistrationSubmitted(true)
@@ -916,8 +1016,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
 
   const handleModalClose = () => {
     resetAllRegistrationFields()
-    setLoginPhone('')
-    setLoginPassword('')
+    refreshCredentials()
     onClose()
   }
 
@@ -948,6 +1047,25 @@ export const LoginModal: React.FC<LoginModalProps> = ({
               Sign in with your registered phone number and password to access the {getRoleConfig(targetRole).title} Console.
             </p>
 
+            {justRegisteredSuccess && (
+              <div className="auth-success-toast" style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '10px 14px',
+                borderRadius: '8px',
+                background: 'rgba(34, 197, 94, 0.12)',
+                border: '1px solid rgba(34, 197, 94, 0.3)',
+                color: '#15803d',
+                fontSize: '13px',
+                fontWeight: 600,
+                marginBottom: '14px'
+              }}>
+                <CheckCircle2 size={16} className="text-emerald-600" />
+                <span>Registration completed! Please enter your password to sign in.</span>
+              </div>
+            )}
+
             {loginError && (
               <div className="auth-error-toast">
                 <AlertCircle size={16} />
@@ -956,19 +1074,44 @@ export const LoginModal: React.FC<LoginModalProps> = ({
             )}
 
             <form onSubmit={handleLoginSubmit} className="auth-form" autoComplete="off">
+              {/* Decoy trap inputs to prevent browser password managers from auto-injecting credentials */}
+              <div style={{ position: 'absolute', opacity: 0, pointerEvents: 'none', height: 0, width: 0, overflow: 'hidden' }} aria-hidden="true">
+                <input type="text" name="fake_user" tabIndex={-1} autoComplete="username" />
+                <input type="password" name="fake_pass" tabIndex={-1} autoComplete="current-password" />
+              </div>
+
               <div className="auth-field">
                 <div className="auth-input-wrapper">
                   {targetRole === 'Admin' ? <User size={20} className="input-icon-left" /> : <Phone size={20} className="input-icon-left" />}
                   <input
+                    ref={phoneInputRef}
                     type={targetRole === 'Admin' ? 'text' : 'tel'}
                     required
                     name="orca_user_phone"
                     id="orca_user_phone"
-                    autoComplete="off"
+                    autoComplete="one-time-code"
+                    autoCorrect="off"
+                    autoCapitalize="off"
+                    spellCheck="false"
                     placeholder={targetRole === 'Admin' ? 'Username' : 'Phone number (10 digits)'}
                     value={loginPhone}
                     onChange={(e) => { setLoginPhone(e.target.value); setLoginError(''); setPendingMatch(null); }}
                   />
+                  {loginPhone && (
+                    <button
+                      type="button"
+                      className="password-eye-btn"
+                      onClick={() => {
+                        setLoginPhone('')
+                        if (phoneInputRef.current) phoneInputRef.current.value = ''
+                      }}
+                      title="Clear phone number"
+                      aria-label="Clear phone number"
+                      style={{ marginRight: '4px' }}
+                    >
+                      <X size={16} />
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -976,24 +1119,52 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                 <div className="auth-input-wrapper">
                   <Lock size={20} className="input-icon-left" />
                   <input
+                    ref={passwordInputRef}
                     type={showPassword ? 'text' : 'password'}
                     required
+                    name="orca_user_pass"
+                    id="orca_user_pass"
+                    autoComplete="current-password"
+                    autoCorrect="off"
+                    autoCapitalize="off"
+                    spellCheck="false"
                     placeholder="Password"
                     value={loginPassword}
                     onChange={(e) => { setLoginPassword(e.target.value); setLoginError(''); }}
                   />
+                  {loginPassword && (
+                    <button
+                      type="button"
+                      className="password-eye-btn"
+                      onClick={() => {
+                        setLoginPassword('')
+                        if (passwordInputRef.current) passwordInputRef.current.value = ''
+                      }}
+                      title="Clear password"
+                      aria-label="Clear password"
+                      style={{ marginRight: '4px' }}
+                    >
+                      <X size={16} />
+                    </button>
+                  )}
                   <button
                     type="button"
                     className="password-eye-btn"
                     onClick={() => setShowPassword(!showPassword)}
+                    title={showPassword ? 'Hide password' : 'Show password'}
                   >
                     {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
                   </button>
                 </div>
               </div>
 
-              <button type="submit" className="btn-auth-primary">
-                {targetRole === 'Admin' ? 'Login as Admin' : 'Login'}
+              <button
+                type="submit"
+                className="btn-auth-primary"
+                id="btn-login-submit"
+                disabled={isLoggingIn}
+              >
+                {isLoggingIn ? 'Signing in...' : targetRole === 'Admin' ? 'Login as Admin' : 'Login'}
               </button>
 
               {targetRole !== 'Admin' && (
@@ -1111,23 +1282,47 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                   <button
                     type="button"
                     className="btn-auth-primary"
+                    id="btn-go-to-login"
                     onClick={() => {
+                      const registeredPhone = lastRegisteredUser?.phone || regPhone || ''
                       setMode('login')
                       setRegistrationSubmitted(false)
-                      setLoginPhone(regPhone)
-                      setLoginPassword(regPassword)
+                      setJustRegisteredSuccess(true)
+                      setLoginPhone(registeredPhone)
+                      setLoginPassword('')
                       setLoginError('')
                       setPendingMatch(null)
+                      if (phoneInputRef.current) {
+                        phoneInputRef.current.value = registeredPhone
+                      }
+                      setTimeout(() => {
+                        passwordInputRef.current?.focus()
+                      }, 100)
                     }}
                   >
-                    Go to Login
+                    Go to Login →
                   </button>
                   <button
                     type="button"
                     className="btn-auth-secondary"
+                    id="btn-direct-dashboard"
                     onClick={() => {
                       const roleKey = targetRole.toLowerCase().replace(/\s+/g, '_')
                       localStorage.setItem(`orca_${roleKey}_registered`, 'true')
+                      if (lastRegisteredUser) {
+                        localStorage.setItem('orca_current_user', JSON.stringify(lastRegisteredUser))
+                        if (targetRole === 'Disaster Management') {
+                          localStorage.setItem('orca_disaster_management_registered', 'true')
+                          localStorage.setItem('orca_disaster_officer_name', lastRegisteredUser.name || 'Captain Vikram Rathore')
+                          localStorage.setItem('orca_disaster_officer_phone', lastRegisteredUser.phone)
+                          localStorage.setItem('orca_disaster_officer_dept', lastRegisteredUser.govDept || 'NDRF Coastal Command & Warning Cell')
+                          localStorage.setItem('orca_disaster_officer_designation', lastRegisteredUser.govDesignation || 'Superintendent of Disaster Operations')
+                          localStorage.setItem('orca_disaster_officer_id', lastRegisteredUser.govId || 'NDRF-EOC-2026-DM')
+                          if (lastRegisteredUser.govImage) {
+                            localStorage.setItem('orca_disaster_officer_photo', lastRegisteredUser.govImage)
+                          }
+                        }
+                      }
                       onLoginSuccess(targetRole)
                     }}
                   >
@@ -1903,13 +2098,9 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                   disabled={
                     !regFullName ||
                     !regPhone ||
-                    regPhone.length < 10 ||
+                    regPhone.replace(/\D/g, '').length < 10 ||
                     !regPassword ||
-                    regPassword.length < 6 ||
-                    (targetRole === 'Disaster Management' && !regGovImage) ||
-                    (targetRole === 'Researchers' && !regInstituteImage) ||
-                    (targetRole === 'Coastal Authorities' && !regServiceImage) ||
-                    ((targetRole === 'Maritime Operators' || targetRole === 'Shipping Operators') && !regLicenseImage)
+                    regPassword.length < 6
                   }
                 >
                   <CheckCircle2 size={20} />

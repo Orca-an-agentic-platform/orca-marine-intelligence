@@ -89,11 +89,44 @@ async def orchestrator_node(state: ORCAState) -> dict:
     logger.info("orchestrator.start", query=state["query"][:80])
 
     q_lower = state["query"].lower()
-    if any(k in q_lower for k in ["pfz", "fish", "wave", "wind", "weather", "hazard", "route", "safe", "nearest", "sea"]):
+    marine_keywords = [
+        "pfz", "fish", "wave", "wind", "weather", "wather", "weath", "forecast",
+        "hazard", "route", "safe", "safety", "nearest", "sea", "ocean", "tide",
+        "temp", "chlorophyll", "cyclone", "storm", "rain", "water", "current",
+        "zone", "catch", "ratnagiri", "port", "harbor", "harbour", "today", "tomorrow"
+    ]
+    if any(k in q_lower for k in marine_keywords):
+        # Detect location
+        if any(b in q_lower for b in ["sri lanka", "border", "palk", "imbl", "mandapam", "rameshwaram"]):
+            loc = "Indo-Sri Lanka Maritime Border / Palk Strait"
+        elif any(p in q_lower for p in ["pakistan", "sir creek", "kutch"]):
+            loc = "Sir Creek / Pakistan Maritime Border"
+        elif "ratnagiri" in q_lower:
+            loc = "Ratnagiri Coast"
+        elif "mumbai" in q_lower:
+            loc = "Mumbai Coast"
+        elif "kochi" in q_lower or "cochin" in q_lower:
+            loc = "Kochi Coast"
+        elif "chennai" in q_lower:
+            loc = "Chennai Coast"
+        elif "visakhapatnam" in q_lower or "vizag" in q_lower:
+            loc = "Visakhapatnam Coast"
+        else:
+            loc = None
+
+        if any(b in q_lower for b in ["sri lanka", "border", "imbl", "restricted", "prohibited"]):
+            query_type = "hazard"
+        elif "pfz" in q_lower:
+            query_type = "pfz"
+        elif any(w in q_lower for w in ["cyclone", "storm", "wave", "wind", "weather", "wather", "rain", "temp"]):
+            query_type = "hazard" if any(c in q_lower for c in ["cyclone", "storm", "danger", "warning"]) else "weather"
+        else:
+            query_type = "fishing_safety"
+
         intent_data = {
-            "query_type": "pfz" if "pfz" in q_lower else ("weather" if "wave" in q_lower or "weather" in q_lower else "fishing_safety"),
-            "location_raw": "Ratnagiri Coast" if "ratnagiri" in q_lower else None,
-            "time_reference": "today",
+            "query_type": query_type,
+            "location_raw": loc,
+            "time_reference": "tomorrow" if "tomorrow" in q_lower else "today",
             "agents_needed": ["marine", "weather", "geo", "knowledge"],
             "sub_tasks": ["retrieve PFZ and sea surface data", "retrieve wave and weather forecast"],
         }
@@ -116,7 +149,7 @@ Return ONLY valid JSON (no markdown, no explanation):
   "sub_tasks": ["check PFZ for location", "check wave forecast"]
 }}"""),
             ]
-            resp = await llm.chat(messages, temperature=0.0)
+            resp = await llm.chat(messages, temperature=0.0, max_tokens=150)
             raw = resp.content.strip()
             if raw.startswith("```"):
                 raw = raw.split("```")[1]
